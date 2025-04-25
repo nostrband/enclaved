@@ -1,0 +1,91 @@
+# Build layer
+FROM eclipse-temurin:21-jre-jammy AS build
+
+# Lock environment for reproducibility
+ARG SOURCE_DATE_EPOCH
+ENV TZ=UTC
+WORKDIR /home/root
+
+RUN echo "Timestamp" ${SOURCE_DATE_EPOCH}
+
+# docker's package sources 
+COPY ./docker-ubuntu.sh .
+RUN ./docker-ubuntu.sh
+RUN rm ./docker-ubuntu.sh
+
+# install stuff
+RUN DEBIAN_FRONTEND=noninteractive apt-get update
+RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    bash=5.1-6ubuntu1.1 \
+    unzip=6.0-26ubuntu3.2 \
+    socat=1.7.4.1-3ubuntu4 \
+    iptables=1.8.7-1ubuntu5.2 \
+    wget=1.21.2-2ubuntu1.1 \
+    net-tools=1.60+git20181103.0eebece-1ubuntu5 \
+    iproute2=5.15.0-1ubuntu2 \
+    ipset=7.15-1build1 \
+    rclone=1.53.3-4ubuntu1.22.04.3 \
+    "docker-ce=5:28.0.4-1~ubuntu.22.04~jammy" \
+    "docker-ce-cli=5:28.0.4-1~ubuntu.22.04~jammy" \
+    containerd.io=1.7.27-1 \
+    && apt clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+#    docker-buildx-plugin \
+#    docker-compose-plugin \
+
+#RUN apt show docker-buildx-plugin docker-compose-plugin
+
+# phoenix as separate user
+RUN useradd -m phoenix
+WORKDIR /home/phoenix
+RUN wget https://github.com/ACINQ/phoenixd/releases/download/v0.5.1/phoenixd-0.5.1-linux-x64.zip
+RUN sha256sum ./phoenixd-0.5.1-linux-x64.zip | grep 0ad77df5692babfc6d53f72d7aaa6ce27fffce750beea9a4965c4fad6805f0af
+RUN unzip -j phoenixd-0.5.1-linux-x64.zip
+RUN rm phoenixd-0.5.1-linux-x64.zip
+RUN chown -R phoenix:phoenix *
+
+# other binaries
+WORKDIR /home/root
+
+# dnsproxy
+RUN wget https://github.com/AdguardTeam/dnsproxy/releases/download/v0.75.2/dnsproxy-linux-amd64-v0.75.2.tar.gz
+RUN sha256sum ./dnsproxy-linux-amd64-v0.75.2.tar.gz | grep 088d3d25c05eabeb840f351afbb12645eeaf34c069a7e60f34bde08e17ed4ea4
+RUN mkdir tmp
+RUN tar -xvzf ./dnsproxy-linux-amd64-v0.75.2.tar.gz -C tmp
+RUN rm dnsproxy-linux-amd64-v0.75.2.tar.gz
+RUN mv ./tmp/linux-amd64/dnsproxy ./
+
+# vsock utils for networking
+COPY build/vsock/ip-to-vsock-raw-outgoing .
+COPY build/vsock/vsock-to-ip-raw-incoming .
+
+# starter
+COPY ./enclave.sh .
+
+# cleanup
+RUN rm -Rf tmp
+
+# final overview
+RUN ls -l
+
+# Mac has different default perms vs Linux
+#RUN chmod go-w .
+
+# Result layer, must be used to exclude global non-reproducible changes made
+# by npm install calls - we're only copying current dir to the result
+#FROM eclipse-temurin:21-jre-jammy AS server
+#WORKDIR /app
+
+# Copy only built files and necessary dependencies
+#COPY --from=build /app ./
+
+# Luckily this one doesn't cause non-reproducability (it seems)
+# socat
+#RUN apk add --no-cache socat=1.8.0.0-r0
+
+# remove files generated on MacOS
+#RUN rm -Rf /root
+
+# Run the server
+COPY ./debug*.sh .
+ENTRYPOINT ["/home/root/debug.sh"]
