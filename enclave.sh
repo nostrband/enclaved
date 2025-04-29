@@ -77,10 +77,12 @@ curl -v https://google.com
 #echo "enclave => docker"
 #curl -v localhost:3000
 
-docker pull nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
-docker image ls
+#docker pull nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
+#docker image ls
+#docker run -it --rm nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 
-docker run -it --rm nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
+docker pull busybox
+docker run -it --rm busybox wget https://google.com #telnet 3.33.236.230 9735
 
 wait $SUPERVISOR_PID
 
