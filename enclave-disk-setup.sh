@@ -13,9 +13,7 @@ dd if=/dev/zero of=/run/disk.img bs=1M count=$DOCKER_DISK_SIZE
 losetup -fP /run/disk.img
 LOOP_DEV=$(losetup -j /run/disk.img | cut -d: -f1)
 # format and mount the disk file
-echo "calling mkfs on $LOOP_DEV"
 mkfs.xfs -f $LOOP_DEV
-echo "done mkfs"
 mkdir /mnt/xfs
 mount -t xfs -o pquota $LOOP_DEV /mnt/xfs
 

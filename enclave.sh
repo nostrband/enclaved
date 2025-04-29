@@ -53,26 +53,34 @@ done
 # start docker compose
 #/app/supervisord ctl -c /etc/supervisord.conf start compose
 
+
+# start phoenixd
+#./supervisord ctl -c supervisord.conf start phoenixd
+
 # test dns and networking
 curl -v https://google.com
 
 
 # TEST DOCKER
-docker load < test.tar
+#docker load < test.tar
 #docker load < etest.tar
-docker image ls
-docker info
+#docker image ls
+#docker info
 
 # try on docker
 #docker run --network="host" etest:latest & 
 #sleep 2
-docker run -p 3000:3000 test:latest &
+#docker run -p 3000:3000 test:latest &
 
-sleep 2
+#sleep 2
 
-echo "enclave => docker"
-curl -v localhost:3000
+#echo "enclave => docker"
+#curl -v localhost:3000
 
+docker pull nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
+docker image ls
+
+docker run -it --rm nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 
 wait $SUPERVISOR_PID
 

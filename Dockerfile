@@ -10,8 +10,11 @@ RUN echo "Timestamp" ${SOURCE_DATE_EPOCH}
 
 # docker's package sources 
 COPY ./docker-ubuntu.sh .
-RUN ./docker-ubuntu.sh
-RUN rm ./docker-ubuntu.sh
+RUN ./docker-ubuntu.sh && rm ./docker-ubuntu.sh
+
+# nodejs package sources
+COPY ./nodesource_setup.sh .
+RUN ./nodesource_setup.sh && rm ./nodesource_setup.sh
 
 # install stuff w/ specific versions
 RUN DEBIAN_FRONTEND=noninteractive apt-get update
@@ -28,10 +31,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     "docker-ce-cli=5:28.0.4-1~ubuntu.22.04~jammy" \
     containerd.io=1.7.27-1 \
     rclone=1.53.3-4ubuntu1.22.04.3 \
-    xfsprogs=5.13.0-1ubuntu2.1
+    xfsprogs=5.13.0-1ubuntu2.1 \
+    nodejs=23.11.0-1nodesource1
 
-#RUN apt show xfsprogs
-
+#RUN apt show nodejs
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
 
@@ -65,8 +68,8 @@ RUN mv ./supervisord_0.7.3_Linux_64-bit/supervisord ./supervisord
 RUN rm -Rf ./supervisord_0.7.3_Linux_64-bit ./supervisord_0.7.3_Linux_64-bit.tar.gz
 
 # vsock utils for networking
-COPY build/vsock/ip-to-vsock-raw-outgoing .
-COPY build/vsock/vsock-to-ip-raw-incoming .
+COPY ./build/vsock/ip-to-vsock-raw-outgoing .
+COPY ./build/vsock/vsock-to-ip-raw-incoming .
 
 # starter
 COPY ./enclave*.sh .
@@ -74,6 +77,18 @@ COPY ./supervisord.conf .
 
 # test app - remove later
 COPY ./test-app/build/test.tar .
+
+# enclaved app
+# Copy only package-related files first
+COPY package.json package-lock.json ./
+# Install dependencies 
+RUN npm ci --ignore-scripts
+# cleanup after npm install etc
+RUN rm -Rf /tmp/*
+
+# Copy the rest of the project
+COPY src ./
+COPY tsconfig.json ./
 
 # Mac has different default perms vs Linux
 # FIXME what about /home/phoenix?
