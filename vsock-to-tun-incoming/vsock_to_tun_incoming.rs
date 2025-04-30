@@ -1,42 +1,38 @@
-use std::fs::OpenOptions;
 use std::io::{Read, Write};
-use std::os::unix::io::{AsRawFd, RawFd};
-use std::process::exit;
-use std::time::Duration;
-use tun_tap::Tun;
-use vsock::VsockStream;
+use std::os::fd::{FromRawFd, AsRawFd};
+use std::fs::File;
 
-const TUN_NAME: &str = "br0"; // The name of the TUN device
-const VSCK_PATH: &str = "/dev/vsock"; // Path to the vsock device
+use tun_tap::{Iface, Mode};
+use vsock::{VsockStream};
+use nix::sys::socket::{SockAddr};
 
-fn read_packet_from_vsock(vsock_stream: &mut VsockStream) -> Result<Vec<u8>, std::io::Error> {
-    let mut buf = Vec::new();
-    vsock_stream.read_to_end(&mut buf)?;
+fn read_packet_from_vsock(stream: &mut VsockStream) -> std::io::Result<Vec<u8>> {
+    let mut len_buf = [0u8; 2];
+    stream.read_exact(&mut len_buf)?;
+    let len = u16::from_be_bytes(len_buf) as usize;
+
+    let mut buf = vec![0u8; len];
+    stream.read_exact(&mut buf)?;
     Ok(buf)
 }
 
-fn forward_to_tun(tun_fd: RawFd, packet: &[u8]) -> Result<(), std::io::Error> {
-    let mut tun_device = unsafe { std::fs::File::from_raw_fd(tun_fd) };
-    tun_device.write_all(packet)?;
-    Ok(())
-}
+fn main() -> std::io::Result<()> {
+    // Open the TUN device
+    let iface = Iface::new("tun0", Mode::Tun)?;
+    let tun_fd = iface.as_raw_fd();
 
-fn main() -> Result<(), std::io::Error> {
-    // Open /dev/vsock for reading
-    let mut vsock_device = VsockStream::connect("16:1080")?;
-    let tun_fd = Tun::open(TUN_NAME).unwrap().as_raw_fd();
+    // Create a SockAddr with CID 16 and port 1080
+    let sock_addr = SockAddr::new_vsock(16, 1080);
 
-    println!("Starting packet forwarding from vsock to TUN");
+    // Connect to /dev/vsock
+    let mut vsock_stream = VsockStream::connect(&sock_addr)?;
+
+    println!("Forwarding packets from vsock to TUN...");
 
     loop {
-        // Read packet from /dev/vsock
-        let packet = read_packet_from_vsock(&mut vsock_device)?;
-
-        // Forward the packet to the TUN device
-        if let Err(e) = forward_to_tun(tun_fd, &packet) {
-            eprintln!("Error forwarding packet to TUN: {:?}", e);
-        }
+        let packet = read_packet_from_vsock(&mut vsock_stream)?;
+        let mut tun_writer = unsafe { File::from_raw_fd(tun_fd) };
+        tun_writer.write_all(&packet)?;
+        std::mem::forget(tun_writer); // Prevent fd from being closed
     }
-
-    Ok(())
 }

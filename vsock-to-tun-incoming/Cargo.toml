@@ -1,7 +1,12 @@
+[package]
+name = "vsock_to_tun_incoming"
+version = "0.1.0"
+edition = "2021"
+
 [dependencies]
-nfqueue = "0.2"
+tun-tap = "0.1.4"
 vsock = "0.1"
-tun-tap = "0.3"
+nix = "0.15"
 
 [[bin]]
 name = "vsock-to-tun-incoming"
