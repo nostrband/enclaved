@@ -1,0 +1,14 @@
+[dependencies]
+nfqueue = "0.2"
+vsock = "0.1"
+tun-tap = "0.3"
+
+[[bin]]
+name = "vsock-to-tun-incoming"
+path = "vsock_to_tun_incoming.rs"
+
+[profile.release]
+strip = true
+lto = true
+panic = "abort"
+codegen-units = 1

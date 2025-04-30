@@ -5,7 +5,6 @@
 
 DT=`date +%F_%H-%M-%S`
 echo $DT
-sudo -v
 sudo mkdir -p  /usr/share/nitro_enclaves/blobs
 sudo mkdir -p /usr/share/nitro_enclaves/blobs-$DT
 echo "Making backup to /usr/share/nitro_enclaves/blobs-$DT"

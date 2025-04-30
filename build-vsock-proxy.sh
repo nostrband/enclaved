@@ -11,6 +11,6 @@ git checkout 001645fd4b459a6a84d8d8107ef98e188f1e1b4f
 nix --extra-experimental-features nix-command --extra-experimental-features flakes --accept-flake-config build -v .#gnu.networking.raw-proxy.uncompressed
 cd ../
 mkdir -p vsock
-rsync -av oyster-monorepo/networking/raw-proxy/result/bin/ vsock/
+rsync -av oyster-monorepo/result/bin/ vsock/
 echo "Done"
 ls -l vsock

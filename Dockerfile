@@ -32,9 +32,13 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     containerd.io=1.7.27-1 \
     rclone=1.53.3-4ubuntu1.22.04.3 \
     xfsprogs=5.13.0-1ubuntu2.1 \
+    "conntrack=1:1.4.6-2build2" \
+    bridge-utils \
+    iputils-ping \
+    tcpdump \
     nodejs=23.11.0-1nodesource1
-
-#RUN apt show nodejs
+# FIXME remove conntrack and bridge-utils
+#RUN apt show conntrack
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
 
@@ -77,6 +81,7 @@ COPY ./supervisord.conf .
 
 # test app - remove later
 COPY ./test-app/build/test.tar .
+COPY ./test-app/echo-server .
 
 # enclaved app
 # Copy only package-related files first

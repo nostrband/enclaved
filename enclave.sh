@@ -14,8 +14,9 @@ df
 ls -l
 ls -l /
 
+# FIXME take IP from parent
 # disk
-./enclave-disk-setup.sh
+./enclave-disk-setup.sh 
 
 # network
 ./enclave-network-setup.sh
@@ -57,6 +58,9 @@ done
 # start phoenixd
 #./supervisord ctl -c supervisord.conf start phoenixd
 
+# test networking
+curl -v http://65.109.67.137
+
 # test dns and networking
 curl -v https://google.com
 
@@ -77,13 +81,40 @@ curl -v https://google.com
 #echo "enclave => docker"
 #curl -v localhost:3000
 
+#ip link set docker0 up
+#ip link show docker0
+#brctl show
+#ip route
+#ip addr 
+#ip -4 addr show docker0
+#ip -4 addr show br0
+#ip route show
+
+./echo-server &
+
 #docker pull nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 #docker image ls
-#docker run -it --rm nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
+# bind /etc/sysctl.conf to make sure our settings of ephemeral ports are copied to the container
+#docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 
+echo "IPTABLES"
+iptables-save
+echo "=================="
+
+set +e
 docker pull busybox
-docker run -it --rm busybox wget https://google.com #telnet 3.33.236.230 9735
+#docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox ip route # telnet 3.33.236.230 9735
+iptables -Z FORWARD
+#tcpdump -i docker0 -n -v &
+tcpdump -i br0 -n -v &
+conntrack --help 
+#docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox wget http://172.31.43.219:3000 # telnet 3.33.236.230 9735
+docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox wget http://65.109.67.137 # telnet 3.33.236.230 9735
+#iptables -L FORWARD -v -n
+#sleep 1
+#iptables -L FORWARD -v -n
 
+echo "all done"
 wait $SUPERVISOR_PID
 
 
