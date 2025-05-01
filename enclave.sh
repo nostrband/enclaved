@@ -60,6 +60,8 @@ done
 # start phoenixd
 #./supervisord ctl -c supervisord.conf start phoenixd
 
+tcpdump -i br0 -n -v &
+
 # test networking
 curl -v http://65.109.67.137
 

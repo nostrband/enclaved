@@ -103,19 +103,15 @@ iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o br0 -j MASQUERADE
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
 iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
 
-# incoming packets for docker 
-#iptables -t nat -A POSTROUTING -s $ip -o docker0 -j MASQUERADE
-
 # Allow conntrack-based return from br0 to Docker
-iptables -A FORWARD -i docker0 -o br0 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
 iptables -A FORWARD -i br0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
 # Forward new traffic from br0 to Docker
-iptables -A FORWARD -i br0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
+#iptables -A FORWARD -i br0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
 
 # Accept packets to host IP on br0
 #iptables -A INPUT -i br0 -d $ip -j ACCEPT
-iptables -A INPUT -i br0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+#iptables -A INPUT -i br0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 #iptables -A FORWARD -i br0 -o docker0 -j LOG --log-prefix "BR0->DOCKER DROP: "
 
 

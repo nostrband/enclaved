@@ -70,6 +70,7 @@ fn handle_conn(
 
         let size: usize = u16::from_be_bytes(buf[2..4].try_into().unwrap()).into();
         println!("got packet from vsock");
+        println!("First bytes: {:02x?}", &buf[0..12]);
 
         // read till full frame
         conn_socket
