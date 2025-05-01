@@ -2,7 +2,7 @@
 
 # parent CID = 3
 ./ip-to-vsock-raw-outgoing --vsock-addr 3:1080 --queue-num 0 &
-./vsock-to-ip-raw-incoming --vsock-addr $ENCLAVE_CID:1080 --device br0 &
+./vsock-to-ip-raw-incoming --vsock-addr $ENCLAVE_CID:1080 --device tun0 &
 
 sleep 5
 

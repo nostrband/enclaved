@@ -28,13 +28,13 @@ ip link set lo up
 #ip route add default dev br0 src $ip
 
 # add TUN device for incoming traffic for docker 
-ip tuntap add dev br0 mode tun
-ip addr add $ip/32 dev br0
-ip link set dev br0 mtu 9001
-ip link set dev br0 up
+ip tuntap add dev tun0 mode tun
+ip addr add $ip/32 dev tun0
+ip link set dev tun0 mtu 9001
+ip link set dev tun0 up
 
 # adding a default route via the bridge
-ip route add default dev br0 src $ip
+ip route add default dev tun0 src $ip
 # OR???
 #ip route add default via $ip dev tun0
 
@@ -99,30 +99,34 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # forward traffic from docker containers
 # =======
 # MASQUERADE for outbound NAT from docker subnet to $ip
-iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o br0 -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o tun0 -j MASQUERADE
+iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j MARK --set-mark 1
+iptables -t mangle -A FORWARD -m mark --mark 1 -j NFQUEUE --queue-num 0
+
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
-iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
+#iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
+#iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j NFQUEUE --queue-num 0
 
-# Allow conntrack-based return from br0 to Docker
-iptables -A FORWARD -i br0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+# Allow conntrack-based return from tun0 to Docker
+iptables -A FORWARD -i tun0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
-# Forward new traffic from br0 to Docker
-#iptables -A FORWARD -i br0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
+# Forward new traffic from tun0 to Docker
+#iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
 
-# Accept packets to host IP on br0
-#iptables -A INPUT -i br0 -d $ip -j ACCEPT
-#iptables -A INPUT -i br0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-#iptables -A FORWARD -i br0 -o docker0 -j LOG --log-prefix "BR0->DOCKER DROP: "
+# Accept packets to host IP on tun0
+#iptables -A INPUT -i tun0 -d $ip -j ACCEPT
+#iptables -A INPUT -i tun0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+#iptables -A FORWARD -i tun0 -o docker0 -j LOG --log-prefix "RUN->DOCKER DROP: "
 
 
-# Allow container → outside (br0)
-#iptables -A FORWARD -i docker0 -o br0 -s 172.17.0.0/16 -j ACCEPT
+# Allow container → outside (tun0)
+#iptables -A FORWARD -i docker0 -o tun0 -s 172.17.0.0/16 -j ACCEPT
 # Allow return traffic (tracked)
-#iptables -A FORWARD -i br0 -o docker0 -d 172.17.0.0/16 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+#iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 # Fallback: allow direct return
-#iptables -A FORWARD -i br0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
+#iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
 # A rule if conntrack is broken
-#iptables -I FORWARD -i br0 -d 172.17.0.0/16 -j ACCEPT
+#iptables -I FORWARD -i tun0 -d 172.17.0.0/16 -j ACCEPT
 # NFQUEUE rule for filtering container outbound traffic
 #iptables -A FORWARD -p tcp -s 172.17.0.0/16 -m set --match-set portfilter src -m set ! --match-set internal dst -j NFQUEUE --queue-num 0
 # =======
