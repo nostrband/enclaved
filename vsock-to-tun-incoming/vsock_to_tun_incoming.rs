@@ -94,7 +94,7 @@ fn handle_conn(
         }
 
         tun_writer
-            .write_all(&buf)
+            .write_all(&buf[..size])
             .map_err(SocketError::WriteError)
             .map_err(ProxyError::IpError)?;
 
