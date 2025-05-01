@@ -40,7 +40,8 @@ echo "status"
 ./supervisord ctl -c supervisord.conf start vsock-to-ip-raw-incoming
 
 # start dnsproxy
-./supervisord ctl -c supervisord.conf start dnsproxy
+# FIXME turned off to simplify debugging
+#./supervisord ctl -c supervisord.conf start dnsproxy
 
 sleep 2
 
@@ -114,20 +115,39 @@ iptables -Z FORWARD
 ls /proc/net/nf_conntrack
 tcpdump -i tun0 -XX &
 
+echo "nat1"
+iptables -t nat -nvL POSTROUTING
+echo "mangle1"
+iptables -t mangle -nvL 
+echo "filter1"
+iptables -t filter -nvL OUTPUT
+echo "nfqueue1"
+cat /proc/net/netfilter/nfnetlink_queue
+echo "conntrack1"
+cat /proc/net/nf_conntrack 
+conntrack -E -p tcp &
+
 #conntrack -L conntrack &
 sleep 1
 # --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro  - shouldn't be needed bcs docker is behind NAT
 #docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox wget http://172.31.43.219:3000 # telnet 3.33.236.230 9735
 docker run -it --rm busybox wget http://65.109.67.137 # telnet 3.33.236.230 9735
 
+echo "nat2"
+iptables -t nat -nvL POSTROUTING
+echo "mangle2"
+iptables -t mangle -nvL 
+echo "filter2"
+iptables -t filter -nvL OUTPUT
+echo "nfqueue1"
+cat /proc/net/netfilter/nfnetlink_queue
+echo "conntrack2"
 conntrack -L conntrack 
+echo "conntrack2"
+cat /proc/net/nf_conntrack 
 
-# cat /proc/net/nf_conntrack | head
-iptables -L -n -v
-iptables -t nat -L -n -v
-
-grep iptables /var/log/messages
-grep conntrack /var/log/messages
+dmesg | grep iptables
+dmesg | grep conntrack
 
 
 #iptables -L FORWARD -v -n

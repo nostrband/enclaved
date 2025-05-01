@@ -38,7 +38,7 @@ ip route add default dev tun0 src $ip
 
 # docker routing
 ip rule add fwmark 1 table 100
-ip route add default dev lo table 100
+ip route add default dev tun0 table 100
 
 # localhost dns
 echo "127.0.0.1 localhost" > /etc/hosts
@@ -103,19 +103,34 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # forward traffic from docker containers
 # =======
 # MASQUERADE for outbound NAT from docker subnet to $ip
-iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o tun0 -j MASQUERADE
-iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j MARK --set-mark 1
-iptables -t mangle -A PREROUTING -m mark --mark 1 -j NFQUEUE --queue-num 0
+# first we set the mark docker docker packets
+iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j MARK --set-mark 1
+iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-mark
+# then we NAT them and change source IP to $ip and conntrack them
+#iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o tun0 -j MASQUERADE
+# trying SNAT
+#iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+#iptabled -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+#iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j SNAT --to-source $ip
+# then those packets are looped back via
+#ip rule add fwmark 1 table 100
+#ip route add default dev lo table 100
+
+# then we catch them before routing and restore the mark and send to NFQUEUE
+iptables -t mangle -A PREROUTING -j CONNMARK --restore-mark
+# iptables -t mangle -A PREROUTING -m mark --mark 1 -j LOG --log-prefix "NFQUEUE packet: "
+iptables -t mangle -A PREROUTING -m mark --mark 1 -j NFQUEUE --queue-num 0 
+
 
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
 #iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
 #iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j NFQUEUE --queue-num 0
 
 # Allow conntrack-based return from tun0 to Docker
-iptables -A FORWARD -i tun0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+#iptables -A FORWARD -i tun0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
-iptables -A INPUT -i tun0 -j LOG --log-prefix "tun0-IN: "
-iptables -A FORWARD -i tun0 -j LOG --log-prefix "tun0-FWD: "
+#iptables -A INPUT -i tun0 -j LOG --log-prefix "tun0-IN: "
+#iptables -A FORWARD -i tun0 -j LOG --log-prefix "tun0-FWD: "
 
 # Forward new traffic from tun0 to Docker
 #iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -j ACCEPT

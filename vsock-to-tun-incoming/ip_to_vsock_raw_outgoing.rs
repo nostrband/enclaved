@@ -50,6 +50,7 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue) -> Result<(), ProxyE
     loop {
         let mut msg = queue
             .recv()
+            .inspect_err(|e| eprintln!("NFQUEUE receive error: {:?}", e))
             .map_err(SocketError::ReadError)
             .map_err(ProxyError::NfqError)?;
 
