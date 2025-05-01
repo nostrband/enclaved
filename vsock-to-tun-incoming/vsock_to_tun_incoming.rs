@@ -69,8 +69,7 @@ fn handle_conn(
             .map_err(ProxyError::VsockError)?;
 
         let size: usize = u16::from_be_bytes(buf[2..4].try_into().unwrap()).into();
-        println!("got packet from vsock");
-        println!("First bytes: {:02x?}", &buf[0..12]);
+        println!("got packet from vsock, size {:?}", size);
 
         // read till full frame
         conn_socket
@@ -87,13 +86,13 @@ fn handle_conn(
                 acc + &val.to_string()
             }
         });
-        println!("First bytes: {:?}", dst_addr);
+        println!("dst_addr: {:?}", dst_addr);
+        println!("header: {:02x?}", &buf[0..20]);
 
         if dst_addr != ip {
             continue;
         }
 
-        println!("Writing: {:?} bytes", size);
         tun_writer
             .write_all(&buf[..size])
             .map_err(SocketError::WriteError)
