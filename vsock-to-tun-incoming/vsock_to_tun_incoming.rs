@@ -93,6 +93,7 @@ fn handle_conn(
             continue;
         }
 
+        println!("Writing: {:?} bytes", size);
         tun_writer
             .write_all(&buf[..size])
             .map_err(SocketError::WriteError)
