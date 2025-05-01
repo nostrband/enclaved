@@ -87,6 +87,8 @@ fn handle_conn(
                 acc + &val.to_string()
             }
         });
+        println!("First bytes: {:?}", dst_addr);
+
         if dst_addr != ip {
             continue;
         }
