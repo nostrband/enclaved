@@ -105,8 +105,7 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # MASQUERADE for outbound NAT from docker subnet to $ip
 iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o tun0 -j MASQUERADE
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j MARK --set-mark 1
-iptables -t mangle -A OUTPUT -m mark --mark 1 -j NFQUEUE --queue-num 0
-echo "set mark rules"
+iptables -t mangle -A PREROUTING -m mark --mark 1 -j NFQUEUE --queue-num 0
 
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
 #iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
