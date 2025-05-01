@@ -37,6 +37,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     iputils-ping \
     tcpdump \
     nodejs=23.11.0-1nodesource1
+
 # FIXME remove conntrack and bridge-utils
 #RUN apt show conntrack
 RUN apt clean 
@@ -74,6 +75,7 @@ RUN rm -Rf ./supervisord_0.7.3_Linux_64-bit ./supervisord_0.7.3_Linux_64-bit.tar
 # vsock utils for networking
 COPY ./build/vsock/ip-to-vsock-raw-outgoing .
 COPY ./build/vsock/vsock-to-ip-raw-incoming .
+COPY ./build/vsock/vsock-to-tun-incoming .
 
 # starter
 COPY ./enclave*.sh .
@@ -92,7 +94,7 @@ RUN npm ci --ignore-scripts
 RUN rm -Rf /tmp/*
 
 # Copy the rest of the project
-COPY src ./
+COPY src src
 COPY tsconfig.json ./
 
 # Mac has different default perms vs Linux

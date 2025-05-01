@@ -1,8 +1,4 @@
 {
-  nixConfig = {
-    extra-substituters = ["https://oyster.cachix.org"];
-    extra-trusted-public-keys = ["oyster.cachix.org-1:QEXLEQvMA7jPLn4VZWVk9vbtypkXhwZknX+kFgDpYQY="];
-  };
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/release-24.11";
     fenix = {

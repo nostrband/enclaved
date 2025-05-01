@@ -69,6 +69,7 @@ fn handle_conn(
             .map_err(ProxyError::VsockError)?;
 
         let size: usize = u16::from_be_bytes(buf[2..4].try_into().unwrap()).into();
+        println!("got packet from vsock");
 
         // read till full frame
         conn_socket
