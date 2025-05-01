@@ -86,8 +86,15 @@ fn handle_conn(
                 acc + &val.to_string()
             }
         });
+        let src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+            if acc != "" {
+                acc + "." + &val.to_string()
+            } else {
+                acc + &val.to_string()
+            }
+        });
         // println!("dst_addr: {:?}", dst_addr);
-        println!("incoming {:?}: {:02x?}", size, &buf[0..size]);
+        println!("incoming {:?} from {:?}: {:02x?}", size, src_addr, &buf[0..size]);
 
         if dst_addr != ip {
             continue;

@@ -56,7 +56,15 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue) -> Result<(), ProxyE
         let buf = msg.get_payload_mut();
 
         let size = buf.len();
-        println!("outgoing {:?}: {:02x?} ", size, &buf);
+        let src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+          if acc != "" {
+              acc + "." + &val.to_string()
+          } else {
+              acc + &val.to_string()
+          }
+        });
+
+        println!("outgoing {:?} from {:?}: {:02x?} ", size, src_addr, &buf);
 
         // send through vsock
         let mut total_sent = 0;
