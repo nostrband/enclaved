@@ -69,7 +69,7 @@ fn handle_conn(
             .map_err(ProxyError::VsockError)?;
 
         let size: usize = u16::from_be_bytes(buf[2..4].try_into().unwrap()).into();
-        println!("got packet from vsock, size {:?}", size);
+        // println!("got packet from vsock, size {:?}", size);
 
         // read till full frame
         conn_socket
@@ -86,8 +86,8 @@ fn handle_conn(
                 acc + &val.to_string()
             }
         });
-        println!("dst_addr: {:?}", dst_addr);
-        println!("full packet: {:02x?}", &buf[0..20]);
+        // println!("dst_addr: {:?}", dst_addr);
+        // println!("full packet: {:02x?}", &buf[0..20]);
 
         if dst_addr != ip {
             continue;
@@ -123,7 +123,9 @@ fn main() -> anyhow::Result<()> {
     // get ip socket
     let device = &cli.device;
     // let mut ip_socket = new_ip_socket_with_backoff(device);
-    // Open the TUN device
+    // Open the TUN device, set IFF_NO_PI option to make sure
+    // it doesn't expect 4 bytes prefix with flags and proto and just
+    // accepts only raw packets
     let iface = tun_tap::Iface::without_packet_info(device, Mode::Tun)?;
     // let iface = Iface::new(device, Mode::Tun)?;
     let tun_fd = iface.as_raw_fd();
