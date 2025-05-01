@@ -32,7 +32,7 @@ use std::io::Read;
 
 use clap::Parser;
 use socket2::{SockAddr, Socket};
-use tun_tap::{Iface, Mode};
+use tun_tap::{Mode};
 use std::fs::File;
 use std::io::Write;
 use std::os::fd::AsRawFd;

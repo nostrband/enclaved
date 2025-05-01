@@ -2,3 +2,4 @@ build
 test-app
 node_modules
 vsock-to-tun-incoming/target
+*.tar

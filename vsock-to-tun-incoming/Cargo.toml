@@ -20,6 +20,10 @@ path = "lib.rs"
 name = "vsock-to-tun-incoming"
 path = "vsock_to_tun_incoming.rs"
 
+[[bin]]
+name = "ip-to-vsock-raw-outgoing"
+path = "ip_to_vsock_raw_outgoing.rs"
+
 [profile.release]
 strip = true
 lto = true

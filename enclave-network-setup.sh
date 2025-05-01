@@ -30,13 +30,15 @@ ip link set lo up
 # add TUN device for incoming traffic for docker 
 ip tuntap add dev tun0 mode tun
 ip addr add $ip/32 dev tun0
-ip link set dev tun0 mtu 9001
+ip link set dev tun0 mtu 1500 #9001
 ip link set dev tun0 up
 
 # adding a default route via the bridge
 ip route add default dev tun0 src $ip
-# OR???
-#ip route add default via $ip dev tun0
+
+# docker routing
+ip rule add fwmark 1 table 100
+ip route add default dev lo table 100
 
 # localhost dns
 echo "127.0.0.1 localhost" > /etc/hosts
@@ -59,13 +61,15 @@ cat > /etc/sysctl.conf <<EOF
 net.ipv4.ip_local_port_range=1024 61439
 # we need this for forwarding traffic from docker containers
 net.ipv4.ip_forward=1
+# enable conntrack logging
+net.netfilter.nf_conntrack_log_invalid=1
+# disable rp_filter
+net.ipv4.conf.tun0.rp_filter=0
+net.ipv4.conf.all.rp_filter=0
 EOF
 
 # apply the above changes
 sysctl -p /etc/sysctl.conf
-
-echo "net.ipv4.ip_forward"
-sysctl -n net.ipv4.ip_forward
 
 # create ipset with all "internal" (unroutable) addresses
 ipset create internal hash:net
@@ -101,7 +105,8 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # MASQUERADE for outbound NAT from docker subnet to $ip
 iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o tun0 -j MASQUERADE
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j MARK --set-mark 1
-iptables -t mangle -A FORWARD -m mark --mark 1 -j NFQUEUE --queue-num 0
+iptables -t mangle -A OUTPUT -m mark --mark 1 -j NFQUEUE --queue-num 0
+echo "set mark rules"
 
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
 #iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
@@ -109,6 +114,9 @@ iptables -t mangle -A FORWARD -m mark --mark 1 -j NFQUEUE --queue-num 0
 
 # Allow conntrack-based return from tun0 to Docker
 iptables -A FORWARD -i tun0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+iptables -A INPUT -i tun0 -j LOG --log-prefix "tun0-IN: "
+iptables -A FORWARD -i tun0 -j LOG --log-prefix "tun0-FWD: "
 
 # Forward new traffic from tun0 to Docker
 #iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
@@ -131,8 +139,8 @@ iptables -A FORWARD -i tun0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHE
 #iptables -A FORWARD -p tcp -s 172.17.0.0/16 -m set --match-set portfilter src -m set ! --match-set internal dst -j NFQUEUE --queue-num 0
 # =======
 
-iptables -L FORWARD -v -n --line-numbers
-iptables -t nat -vL
+#iptables -L FORWARD -v -n --line-numbers
+#iptables -L nat -v -n --line-numbers
 iptables -S
 
 echo "done enclave-network-setup.sh"

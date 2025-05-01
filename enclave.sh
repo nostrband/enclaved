@@ -64,7 +64,7 @@ done
 curl -v http://65.109.67.137
 
 # test dns and networking
-curl -v https://google.com
+#curl -v https://google.com
 
 
 # TEST DOCKER
@@ -92,7 +92,7 @@ curl -v https://google.com
 #ip -4 addr show tun0
 #ip route show
 
-./echo-server &
+#./echo-server &
 
 #docker pull nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 #docker image ls
@@ -101,7 +101,7 @@ curl -v https://google.com
 
 
 set +e
-docker pull busybox
+docker load < busybox.tar
 #docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox cat /etc/sysctl.conf # telnet 3.33.236.230 9735
 
 echo "IPTABLES"
@@ -119,11 +119,15 @@ sleep 1
 # --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro  - shouldn't be needed bcs docker is behind NAT
 #docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox wget http://172.31.43.219:3000 # telnet 3.33.236.230 9735
 docker run -it --rm busybox wget http://65.109.67.137 # telnet 3.33.236.230 9735
-conntrack -L conntrack -s 172.17.0.2 
+
+conntrack -L conntrack 
 
 # cat /proc/net/nf_conntrack | head
 iptables -L -n -v
 iptables -t nat -L -n -v
+
+grep iptables /var/log/messages
+grep conntrack /var/log/messages
 
 
 #iptables -L FORWARD -v -n
