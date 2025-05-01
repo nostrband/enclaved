@@ -87,14 +87,14 @@ fn handle_conn(
             }
         });
         println!("dst_addr: {:?}", dst_addr);
-        println!("header: {:02x?}", &buf[0..20]);
+        println!("full packet: {:02x?}", &buf[0..20]);
 
         if dst_addr != ip {
             continue;
         }
 
         tun_writer
-            .write_all(&buf[..size])
+            .write_all(&buf[0..size])
             .map_err(SocketError::WriteError)
             .map_err(ProxyError::IpError)?;
 
@@ -124,7 +124,8 @@ fn main() -> anyhow::Result<()> {
     let device = &cli.device;
     // let mut ip_socket = new_ip_socket_with_backoff(device);
     // Open the TUN device
-    let iface = Iface::new(device, Mode::Tun)?;
+    let iface = tun_tap::Iface::without_packet_info(device, Mode::Tun)?;
+    // let iface = Iface::new(device, Mode::Tun)?;
     let tun_fd = iface.as_raw_fd();
 
     let mut tun_writer = unsafe { File::from_raw_fd(tun_fd) };
