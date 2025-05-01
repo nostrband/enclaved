@@ -87,7 +87,7 @@ fn handle_conn(
             }
         });
         // println!("dst_addr: {:?}", dst_addr);
-        // println!("full packet: {:02x?}", &buf[0..20]);
+        println!("incoming {.?}: {:02x?}", size, &buf);
 
         if dst_addr != ip {
             continue;
