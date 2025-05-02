@@ -74,8 +74,7 @@ RUN rm -Rf ./supervisord_0.7.3_Linux_64-bit ./supervisord_0.7.3_Linux_64-bit.tar
 
 # vsock utils for networking
 COPY ./build/vsock/ip-to-vsock-raw-outgoing .
-#COPY ./build/vsock/vsock-to-ip-raw-incoming .
-COPY ./build/vsock/vsock-to-tun-incoming .
+COPY ./build/vsock/vsock-to-ip-raw-incoming .
 
 # starter
 COPY ./enclave*.sh .

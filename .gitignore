@@ -1,5 +1,5 @@
 build
 test-app
 node_modules
-vsock-to-tun-incoming/target
+vsock_proxy/target
 *.tar
