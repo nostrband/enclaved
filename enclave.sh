@@ -117,6 +117,7 @@ tcpdump -i tun0 -XX &
 
 echo "nat1"
 iptables -t nat -nvL POSTROUTING
+iptables -t nat -nvL PREROUTING
 echo "mangle1"
 iptables -t mangle -nvL 
 echo "filter1"
@@ -135,6 +136,7 @@ docker run -it --rm busybox wget http://65.109.67.137 # telnet 3.33.236.230 9735
 
 echo "nat2"
 iptables -t nat -nvL POSTROUTING
+iptables -t nat -nvL PREROUTING
 echo "mangle2"
 iptables -t mangle -nvL 
 echo "filter2"
@@ -149,6 +151,7 @@ cat /proc/net/nf_conntrack
 dmesg | grep iptables
 dmesg | grep conntrack
 
+cat /proc/net/dev
 
 #iptables -L FORWARD -v -n
 #sleep 1

@@ -117,8 +117,11 @@ iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-m
 #ip route add default dev lo table 100
 
 # then we catch them before routing and restore the mark and send to NFQUEUE
-iptables -t mangle -A PREROUTING -j CONNMARK --restore-mark
-iptables -t mangle -A PREROUTING -m mark --mark 1 -j NFQUEUE --queue-num 0 
+# making sure to avoid catching incoming reply packets with the mark using ! -d $ip 
+iptables -t mangle -A PREROUTING ! -d $ip -j CONNMARK --restore-mark
+iptables -t mangle -A PREROUTING ! -d $ip -m mark --mark 1 -j NFQUEUE --queue-num 0 
+
+#iptables -t nat -A PREROUTING -i tun0 -j CONNMARK --restore-mark
 
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
 #iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0

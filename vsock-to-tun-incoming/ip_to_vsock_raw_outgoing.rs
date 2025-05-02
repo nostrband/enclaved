@@ -48,6 +48,8 @@ struct Cli {
     queue_num: u16,
 }
 
+const TCP: u8 = 6;
+
 // Helper function to calculate the checksum for an IP header
 fn checksum_ip4(data: &[u8]) -> u16 {
     let mut sum: u32 = 0;
@@ -94,7 +96,7 @@ fn checksum_tcp4(
       sum += b as u32;
   }
 
-  sum += 6; // Protocol number (TCP)
+  sum += u32::from(TCP); // Protocol number (TCP)
   sum += (tcp_segment.len() as u32) & 0xFFFF;
 
   // TCP header + data
@@ -126,7 +128,6 @@ fn modify_packet(
   const IP_CHECKSUM_OFFSET: usize = 10;
   // excluding IP header
   const TCP_CHECKSUM_OFFSET: usize = 16;
-  const TCP: u8 = 6;
   const MIN_IP_HEADER_LEN: usize = 20;
   const MIN_TCP_HEADER_LEN: usize = 20;
 
