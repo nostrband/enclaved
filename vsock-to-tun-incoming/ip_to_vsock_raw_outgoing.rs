@@ -138,12 +138,11 @@ fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
   }
 
   // Decrement TTL safely
-  if buf[TTL_OFFSET] > 0 {
-      buf[TTL_OFFSET] -= 1;
-  } else {
-      buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
-  }
-
+  // if buf[TTL_OFFSET] > 0 {
+  //     buf[TTL_OFFSET] -= 1;
+  // } else {
+  //     buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
+  // }
 
   // Change source IP
   buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
@@ -209,7 +208,14 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
         if src_addr != ip {
           let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
           modify_packet(&mut buf, new_ip);
-          println!("source_ip changed from {:?}: {:02x?} ", src_addr, &buf);
+          let new_src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+            if acc != "" {
+                acc + "." + &val.to_string()
+            } else {
+                acc + &val.to_string()
+            }
+          });  
+          println!("source_ip changed from {:?} to {:?}: {:02x?} ", src_addr, new_src_addr, &buf);
         }
 
         // send through vsock
