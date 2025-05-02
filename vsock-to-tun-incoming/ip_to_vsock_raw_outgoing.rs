@@ -90,6 +90,13 @@ fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
   // Change source IP
   buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
 
+  // check
+  let old_checksum_val = checksum(&buf[..IP_HEADER_LEN]);
+  if buf[CHECKSUM_OFFSET] != ((old_checksum_val >> 8) as u8)
+    || buf[CHECKSUM_OFFSET + 1] != ((old_checksum_val & 0xFF) as u8) {
+      unreachable!("invalid checksum algo");
+  }
+
   // Zero the checksum before recalculating
   buf[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 2].copy_from_slice(&[0, 0]);
 
