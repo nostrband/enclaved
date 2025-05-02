@@ -777,6 +777,7 @@ name = "vsock_to_tun_incoming"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "byteorder",
  "clap",
  "libc",
  "nfq",

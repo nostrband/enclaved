@@ -30,6 +30,8 @@
 use clap::Parser;
 use nfq::{Queue, Verdict};
 use socket2::{SockAddr, Socket};
+use std::net::Ipv4Addr;
+use byteorder::{BigEndian, ByteOrder};
 
 use oyster_raw_proxy::{
     new_nfq_with_backoff, new_vsock_socket_with_backoff, ProxyError, SocketError, VsockAddrParser,
@@ -46,17 +48,80 @@ struct Cli {
     queue_num: u16,
 }
 
-fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue) -> Result<(), ProxyError> {
+// Helper function to calculate the checksum for an IP header
+fn checksum(data: &[u8]) -> u16 {
+    let mut sum: u32 = 0;
+
+    // Process each 16-bit word (2 bytes)
+    for chunk in data.chunks(2) {
+        let word = if chunk.len() == 2 {
+            BigEndian::read_u16(chunk)
+        } else {
+            (chunk[0] as u16) << 8
+        };
+        sum = sum.wrapping_add(word as u32);
+    }
+
+    // Add carry if any
+    while sum >> 16 != 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+
+    // Return the one's complement of the sum
+    !(sum as u16)
+}
+
+// Modify source IP and recalculate checksum
+fn set_source_ip(buf: &mut [u8], new_source_ip: Ipv4Addr) {
+  const IP_HEADER_LEN: usize = 20;
+  const SRC_IP_OFFSET: usize = 12;
+  const CHECKSUM_OFFSET: usize = 10;
+
+  let new_ip_bytes = new_source_ip.octets();
+
+  // Change source IP
+  buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
+
+  // Zero the checksum before recalculating
+  buf[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 2].copy_from_slice(&[0, 0]);
+
+  // Recalculate checksum over the IP header
+  let checksum_val = checksum(&buf[..IP_HEADER_LEN]);
+
+  // Write new checksum into header
+  buf[CHECKSUM_OFFSET] = (checksum_val >> 8) as u8;
+  buf[CHECKSUM_OFFSET + 1] = (checksum_val & 0xFF) as u8;
+}
+
+// fn main() {
+//     // Example packet in byte buffer (IPv4 packet with source IP 192.168.1.1)
+//     let mut buf: Vec<u8> = vec![
+//         0x45, 0x00, 0x00, 0x3c, 0x1c, 0x46, 0x40, 0x00, 0x40, 0x06, 0x39, 0x10, // IP Header (part)
+//         0xc0, 0xa8, 0x01, 0x01, // Old source IP: 192.168.1.1
+//         0x8c, 0x3a, 0x2a, 0x12, // Destination IP (example)
+//         // (other parts of the packet follow...)
+//     ];
+
+//     // Define the new source IP
+//     let new_source_ip = Ipv4Addr::new(10, 0, 0, 1); // 10.0.0.1
+
+//     // Modify the packet
+//     modify_ip_packet(&mut buf, new_source_ip);
+
+//     // Print the modified packet (in hexadecimal form)
+//     println!("{:x?}", buf);
+// }
+
+fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<(), ProxyError> {
     loop {
         let mut msg = queue
             .recv()
-            // .inspect_err(|e| eprintln!("NFQUEUE receive error: {:?}", e))
             .map_err(SocketError::ReadError)
             .map_err(ProxyError::NfqError)?;
 
-        let buf = msg.get_payload_mut();
-
+        let mut buf = msg.get_payload_mut();
         let size = buf.len();
+
         let dst_addr = buf[16..20].iter().fold(String::new(), |acc, val| {
           if acc != "" {
               acc + "." + &val.to_string()
@@ -66,6 +131,20 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue) -> Result<(), ProxyE
         });
 
         println!("outgoing {:?} to {:?}: {:02x?} ", size, dst_addr, &buf);
+
+        let src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+          if acc != "" {
+              acc + "." + &val.to_string()
+          } else {
+              acc + &val.to_string()
+          }
+        });
+
+        if src_addr != ip {
+          let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
+          set_source_ip(&mut buf, new_ip);
+          println!("source_ip changed from {:?}: {:02x?} ", src_addr, &buf);
+        }
 
         // send through vsock
         let mut total_sent = 0;
@@ -89,6 +168,8 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue) -> Result<(), ProxyE
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
+    let ip = std::fs::read_to_string("/app/ip.txt")?.trim().to_owned();
+
     // nfqueue for incoming packets
     let queue_addr = cli.queue_num;
     let mut queue = new_nfq_with_backoff(queue_addr);
@@ -100,7 +181,7 @@ fn main() -> anyhow::Result<()> {
     loop {
         // do proxying
         // on errors, simply reset the erroring socket
-        match handle_conn(&mut vsock_socket, &mut queue) {
+        match handle_conn(&mut vsock_socket, &mut queue, &ip) {
             Ok(_) => {
                 // should never happen!
                 unreachable!("connection handler exited without error");
