@@ -71,6 +71,56 @@ fn checksum(data: &[u8]) -> u16 {
     !(sum as u16)
 }
 
+// /// Sum all words (16 bit chunks) in the given data. The word at word offset
+// /// `skipword` will be skipped. Each word is treated as big endian.
+// fn sum_be_words(data: &[u8], skipword: usize) -> u32 {
+//   if data.len() == 0 {
+//       return 0;
+//   }
+//   let len = data.len();
+//   let mut cur_data = &data[..];
+//   let mut sum = 0u32;
+//   let mut i = 0;
+//   while cur_data.len() >= 2 {
+//       if i != skipword {
+//           // It's safe to unwrap because we verified there are at least 2 bytes
+//           sum += u16::from_be_bytes(cur_data[0..2].try_into().unwrap()) as u32;
+//       }
+//       cur_data = &cur_data[2..];
+//       i += 1;
+//   }
+
+//   // If the length is odd, make sure to checksum the final byte
+//   if i != skipword && len & 1 != 0 {
+//       sum += (data[len - 1] as u32) << 8;
+//   }
+
+//   sum
+// }
+
+
+// fn finalize_checksum(mut sum: u32) -> u16 {
+//   while sum >> 16 != 0 {
+//       sum = (sum >> 16) + (sum & 0xFFFF);
+//   }
+//   !sum as u16
+// }
+
+// // https://github.com/libpnet/libpnet/blob/main/pnet_packet/src/util.rs#L76
+// /// Calculates a checksum. Used by ipv4 and icmp. The two bytes starting at `skipword * 2` will be
+// /// ignored. Supposed to be the checksum field, which is regarded as zero during calculation.
+// fn checksum_ext(data: &[u8], skipword: usize) -> u16 {
+//   if data.len() == 0 {
+//       return 0;
+//   }
+//   let sum = sum_be_words(data, skipword);
+//   finalize_checksum(sum)
+// }
+
+// fn checksum_ip4(data: &[u8]) -> u16 {
+//   return checksum_ext(data, 5);
+// }
+
 /// Modify source IP and decrement TTL, then recalculate checksum
 fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
   const IP_HEADER_LEN: usize = 20;
@@ -87,15 +137,15 @@ fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
       buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
   }
 
-  // Change source IP
-  buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
-
   // check
   let old_checksum_val = checksum(&buf[..IP_HEADER_LEN]);
   if buf[CHECKSUM_OFFSET] != ((old_checksum_val >> 8) as u8)
     || buf[CHECKSUM_OFFSET + 1] != ((old_checksum_val & 0xFF) as u8) {
       unreachable!("invalid checksum algo");
   }
+
+  // Change source IP
+  buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
 
   // Zero the checksum before recalculating
   buf[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 2].copy_from_slice(&[0, 0]);
