@@ -29,6 +29,10 @@ path = "ip_to_vsock_raw_outgoing.rs"
 name = "ip-to-vsock-raw-incoming"
 path = "ip_to_vsock_raw_incoming.rs"
 
+[[bin]]
+name = "vsock-to-ip-raw-outgoing"
+path = "vsock_to_ip_raw_outgoing.rs"
+
 [profile.release]
 strip = true
 lto = true
