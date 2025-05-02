@@ -133,6 +133,7 @@ sleep 1
 # port collisions
 # --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro
 docker run -it --rm busybox wget http://65.109.67.137
+#docker run -it --rm busybox wget https://google.com
 
 echo "nat2"
 iptables -t nat -nvL POSTROUTING

@@ -30,7 +30,7 @@ ip link set lo up
 # add TUN device for incoming traffic for docker 
 ip tuntap add dev tun0 mode tun
 ip addr add $ip/32 dev tun0
-ip link set dev tun0 mtu 1500 #9001
+ip link set dev tun0 mtu 9001
 ip link set dev tun0 up
 
 # adding a default route via the bridge
