@@ -37,6 +37,7 @@
 use std::ffi::CStr;
 use std::io::Read;
 use std::net::SocketAddrV4;
+use std::net::Ipv4Addr;
 
 use anyhow::{anyhow, Context};
 use clap::Parser;
@@ -128,6 +129,8 @@ fn handle_conn(
         if src_addr != ifaddr {
             continue;
         }
+
+        println!("outgoing {:?} to {:?}: {:02x?}", size, Ipv4Addr::from(dst_addr).to_string(), &buf[..size]);
 
         // https://en.wikipedia.org/wiki/Reserved_IP_addresses
         // ignore packets sent to
