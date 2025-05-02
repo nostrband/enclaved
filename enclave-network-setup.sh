@@ -118,9 +118,7 @@ iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-m
 
 # then we catch them before routing and restore the mark and send to NFQUEUE
 iptables -t mangle -A PREROUTING -j CONNMARK --restore-mark
-# iptables -t mangle -A PREROUTING -m mark --mark 1 -j LOG --log-prefix "NFQUEUE packet: "
 iptables -t mangle -A PREROUTING -m mark --mark 1 -j NFQUEUE --queue-num 0 
-
 
 # forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
 #iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
