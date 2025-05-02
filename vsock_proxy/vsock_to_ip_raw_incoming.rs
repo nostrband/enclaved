@@ -28,6 +28,10 @@
 // While this should not be an issue in most cases since ephemeral ports do not extend there
 // and most applications use ports lower than ephemeral, it _is_ a breaking change
 
+// NOTE: changed to use of TUN instead of bridge device bcs
+// tun exposes /dev/tun that can be written to as file descriptor
+// which sends the packets to kernel stack for reverse-NAT to docker
+
 use std::io::Read;
 
 use clap::Parser;
@@ -93,7 +97,6 @@ fn handle_conn(
                 acc + &val.to_string()
             }
         });
-        // println!("dst_addr: {:?}", dst_addr);
         println!("incoming {:?} from {:?}: {:02x?}", size, src_addr, &buf[0..size]);
 
         if dst_addr != ip {
@@ -104,20 +107,6 @@ fn handle_conn(
             .write_all(&buf[0..size])
             .map_err(SocketError::WriteError)
             .map_err(ProxyError::IpError)?;
-
-        // // send through ip sock
-        // let mut total_sent = 0;
-        // while total_sent < size {
-        //     let size = ip_socket
-        //         .send_to(
-        //             &buf[total_sent..size],
-        //             // port does not matter
-        //             &internal_addr,
-        //         )
-        //         .map_err(SocketError::WriteError)
-        //         .map_err(ProxyError::IpError)?;
-        //     total_sent += size;
-        // }
     }
 }
 
@@ -129,12 +118,10 @@ fn main() -> anyhow::Result<()> {
 
     // get ip socket
     let device = &cli.device;
-    // let mut ip_socket = new_ip_socket_with_backoff(device);
     // Open the TUN device, set IFF_NO_PI option to make sure
     // it doesn't expect 4 bytes prefix with flags and proto and just
     // accepts only raw packets
     let iface = tun_tap::Iface::without_packet_info(device, Mode::Tun)?;
-    // let iface = Iface::new(device, Mode::Tun)?;
     let tun_fd = iface.as_raw_fd();
 
     let mut tun_writer = unsafe { File::from_raw_fd(tun_fd) };
@@ -154,12 +141,6 @@ fn main() -> anyhow::Result<()> {
                 // should never happen!
                 unreachable!("connection handler exited without error");
             }
-            // Err(err @ ProxyError::IpError(_)) => {
-            //     println!("{:?}", anyhow::Error::from(err));
-
-            //     // get ip socket
-            //     // ip_socket = new_ip_socket_with_backoff(device);
-            // }
             Err(err @ ProxyError::VsockError(_)) => {
                 println!("{:?}", anyhow::Error::from(err));
 
@@ -173,43 +154,3 @@ fn main() -> anyhow::Result<()> {
         }
     }
 }
-
-
-// use std::io::{Read, Write};
-// use std::os::fd::{FromRawFd, AsRawFd};
-// use std::fs::File;
-
-// use tun_tap::{Iface, Mode};
-// use vsock::{VsockStream};
-// use nix::sys::socket::{SockAddr};
-
-// fn read_packet_from_vsock(stream: &mut VsockStream) -> std::io::Result<Vec<u8>> {
-//     let mut len_buf = [0u8; 2];
-//     stream.read_exact(&mut len_buf)?;
-//     let len = u16::from_be_bytes(len_buf) as usize;
-
-//     let mut buf = vec![0u8; len];
-//     stream.read_exact(&mut buf)?;
-//     Ok(buf)
-// }
-
-// fn main() -> std::io::Result<()> {
-//     // Open the TUN device
-//     let iface = Iface::new("tun0", Mode::Tun)?;
-//     let tun_fd = iface.as_raw_fd();
-
-//     // Create a SockAddr with CID 16 and port 1080
-//     let sock_addr = SockAddr::new_vsock(16, 1080);
-
-//     // Connect to /dev/vsock
-//     let mut vsock_stream = VsockStream::connect(&sock_addr)?;
-
-//     println!("Forwarding packets from vsock to TUN...");
-
-//     loop {
-//         let packet = read_packet_from_vsock(&mut vsock_stream)?;
-//         let mut tun_writer = unsafe { File::from_raw_fd(tun_fd) };
-//         tun_writer.write_all(&packet)?;
-//         std::mem::forget(tun_writer); // Prevent fd from being closed
-//     }
-// }

@@ -36,10 +36,6 @@ ip link set dev tun0 up
 # adding a default route via the bridge
 ip route add default dev tun0 src $ip
 
-# docker routing
-ip rule add fwmark 1 table 100
-ip route add default dev tun0 table 100
-
 # localhost dns
 echo "127.0.0.1 localhost" > /etc/hosts
 rm /etc/resolv.conf # remove link to /run/resolvconf/resolv.conf
@@ -58,7 +54,8 @@ cat /etc/docker/daemon.json
 cat > /etc/sysctl.conf <<EOF
 # this port range is mapped from the enclave to the parent
 # and can be used to connect to the internet
-net.ipv4.ip_local_port_range=1024 61439
+net.ipv4.ip_local_port_range=1024 9999 
+#61439
 # we need this for forwarding traffic from docker containers
 net.ipv4.ip_forward=1
 # enable conntrack logging
@@ -106,52 +103,22 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # first we set the mark docker docker packets
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j MARK --set-mark 1
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-mark
-# then we NAT them and change source IP to $ip and conntrack them
-#iptables -t nat -A POSTROUTING -s 172.17.0.0/16 -o tun0 -j MASQUERADE
-# trying SNAT
-#iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
-#iptabled -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
-#iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j SNAT --to-source $ip
-# then those packets are looped back via
-#ip rule add fwmark 1 table 100
-#ip route add default dev lo table 100
-
+# then we NAT them and change source IP to $ip and conntrack them,
+# delete default docker rule and set our own rule using simpler SNAT and limiting 
+# source ports from docker to make sure they don't collide with host's ports
+# because our vsock proxy overwrites source IP but can't overwrite the source port
+# NOTE: docker deletion will happen after docker is started in enclave.sh
+#iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -p tcp -j SNAT --to-source $ip:10000-61439
+# since we can't forward to NFQUEUE after POSTROUTING
+# we have to loop these packets back to kernel
+# for second pass of rule matching
+ip rule add fwmark 1 table 100
+ip route add default dev tun0 table 100
 # then we catch them before routing and restore the mark and send to NFQUEUE
 # making sure to avoid catching incoming reply packets with the mark using ! -d $ip 
 iptables -t mangle -A PREROUTING ! -d $ip -j CONNMARK --restore-mark
 iptables -t mangle -A PREROUTING ! -d $ip -m mark --mark 1 -j NFQUEUE --queue-num 0 
-
-#iptables -t nat -A PREROUTING -i tun0 -j CONNMARK --restore-mark
-
-# forward after NAT to NFQUEUE (we can't add NFQUEUE to -t nat rule)
-#iptables -t mangle -A POSTROUTING -s 172.17.0.0/16 -j NFQUEUE --queue-num 0
-#iptables -t mangle -A FORWARD -s 172.17.0.0/16 -o tun0 -j NFQUEUE --queue-num 0
-
-# Allow conntrack-based return from tun0 to Docker
-#iptables -A FORWARD -i tun0 -o docker0 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-
-#iptables -A INPUT -i tun0 -j LOG --log-prefix "tun0-IN: "
-#iptables -A FORWARD -i tun0 -j LOG --log-prefix "tun0-FWD: "
-
-# Forward new traffic from tun0 to Docker
-#iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
-
-# Accept packets to host IP on tun0
-#iptables -A INPUT -i tun0 -d $ip -j ACCEPT
-#iptables -A INPUT -i tun0 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-#iptables -A FORWARD -i tun0 -o docker0 -j LOG --log-prefix "RUN->DOCKER DROP: "
-
-
-# Allow container → outside (tun0)
-#iptables -A FORWARD -i docker0 -o tun0 -s 172.17.0.0/16 -j ACCEPT
-# Allow return traffic (tracked)
-#iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
-# Fallback: allow direct return
-#iptables -A FORWARD -i tun0 -o docker0 -d 172.17.0.0/16 -j ACCEPT
-# A rule if conntrack is broken
-#iptables -I FORWARD -i tun0 -d 172.17.0.0/16 -j ACCEPT
-# NFQUEUE rule for filtering container outbound traffic
-#iptables -A FORWARD -p tcp -s 172.17.0.0/16 -m set --match-set portfilter src -m set ! --match-set internal dst -j NFQUEUE --queue-num 0
 # =======
 
 #iptables -L FORWARD -v -n --line-numbers

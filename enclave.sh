@@ -6,25 +6,26 @@ ENCLAVE_CID=16
 # stop on errors
 set -e
 
-# some info for debugging
+# work dir
 cd /enclaved
-pwd
-free
-df
-ls -l
-ls -l /
 
-# FIXME take IP from parent
+# some info for debugging
+# pwd
+# free
+# df
+# ls -l
+# ls -l /
+
 # disk
 ./enclave-disk-setup.sh 
 
-# network
+# setup network
 ./enclave-network-setup.sh
 
 # required by vsock utils
-mkdir -p /nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66/lib/
+#mkdir -p /nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66/lib/
+#ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66/lib/ld-linux-x86-64.so.2
 mkdir -p /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/
-ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66/lib/ld-linux-x86-64.so.2
 ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/ld-linux-x86-64.so.2
 
 # Run supervisor first, no programs should be running yet
@@ -40,10 +41,7 @@ echo "status"
 ./supervisord ctl -c supervisord.conf start vsock-to-ip-raw-incoming
 
 # start dnsproxy
-# FIXME turned off to simplify debugging
-#./supervisord ctl -c supervisord.conf start dnsproxy
-
-sleep 2
+./supervisord ctl -c supervisord.conf start dnsproxy
 
 # Start the Docker daemon
 ./supervisord ctl -c supervisord.conf start docker
@@ -53,6 +51,9 @@ until docker info >/dev/null 2>&1; do
     echo "[setup.sh] Waiting for Docker daemon..."
     sleep 1
 done
+
+# delete default docker rule that we'll override
+iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 
 # start docker compose
 #/app/supervisord ctl -c /etc/supervisord.conf start compose
@@ -65,7 +66,7 @@ done
 curl -v http://65.109.67.137
 
 # test dns and networking
-#curl -v https://google.com
+curl -v https://google.com
 
 
 # TEST DOCKER
@@ -100,10 +101,9 @@ curl -v http://65.109.67.137
 # bind /etc/sysctl.conf to make sure our settings of ephemeral ports are copied to the container
 #docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 
+#set +e
 
-set +e
 docker load < busybox.tar
-#docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox cat /etc/sysctl.conf # telnet 3.33.236.230 9735
 
 echo "IPTABLES"
 iptables-save
@@ -128,11 +128,11 @@ echo "conntrack1"
 cat /proc/net/nf_conntrack 
 conntrack -E -p tcp &
 
-#conntrack -L conntrack &
 sleep 1
-# --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro  - shouldn't be needed bcs docker is behind NAT
-#docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox wget http://172.31.43.219:3000 # telnet 3.33.236.230 9735
-docker run -it --rm busybox wget http://65.109.67.137 # telnet 3.33.236.230 9735
+# FIXME add separate policy for each container to avoid
+# port collisions
+# --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro
+docker run -it --rm busybox wget http://65.109.67.137
 
 echo "nat2"
 iptables -t nat -nvL POSTROUTING
@@ -152,10 +152,6 @@ dmesg | grep iptables
 dmesg | grep conntrack
 
 cat /proc/net/dev
-
-#iptables -L FORWARD -v -n
-#sleep 1
-#iptables -L FORWARD -v -n
 
 echo "all done"
 wait $SUPERVISOR_PID

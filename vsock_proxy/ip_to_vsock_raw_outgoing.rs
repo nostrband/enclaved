@@ -188,6 +188,13 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
             .map_err(SocketError::ReadError)
             .map_err(ProxyError::NfqError)?;
 
+        // ideally we should also read conntrack info for the
+        // packet and change all fields properly, source port in particular,
+        // that would ensure we wouldn't need source port limits per docker
+        // container that we're now forced to use, but nfq doesn't read
+        // conntrack so... one day.
+        // https://github.com/torvalds/linux/blob/master/include/uapi/linux/netfilter/nfnetlink_conntrack.h
+
         let mut buf = msg.get_payload_mut();
         let size = buf.len();
 

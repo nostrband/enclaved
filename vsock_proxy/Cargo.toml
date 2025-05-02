@@ -1,5 +1,5 @@
 [package]
-name = "vsock_to_tun_incoming"
+name = "vsock_proxy"
 version = "0.1.0"
 edition = "2021"
 
@@ -18,8 +18,8 @@ name = "oyster_raw_proxy"
 path = "lib.rs"
 
 [[bin]]
-name = "vsock-to-tun-incoming"
-path = "vsock_to_tun_incoming.rs"
+name = "vsock-to-ip-raw-incoming"
+path = "vsock_to_ip_raw_incoming.rs"
 
 [[bin]]
 name = "ip-to-vsock-raw-outgoing"

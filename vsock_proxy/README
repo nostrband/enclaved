@@ -1,0 +1,10 @@
+vsock proxy
+===========
+
+Mostly a complete copy from https://github.com/marlinprotocol/oyster-monorepo/tree/master/networking/raw-proxy
+with some logging and with some primitive NAT
+for outgoing packets - replacing source IP with
+host's address, since NFQUEUE returns original packets
+not the NATed version, and Rust lib used doesn't
+let us read the NAT info. Also using TUN device to
+insert incoming packets to kernel for reverse-NAT.
