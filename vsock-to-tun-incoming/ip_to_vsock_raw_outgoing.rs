@@ -130,6 +130,13 @@ fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
 
   let new_ip_bytes = new_source_ip.octets();
 
+  // check
+  let old_checksum_val = checksum_ip4(&buf[..IP_HEADER_LEN]);
+  if buf[CHECKSUM_OFFSET] != ((old_checksum_val >> 8) as u8)
+    || buf[CHECKSUM_OFFSET + 1] != ((old_checksum_val & 0xFF) as u8) {
+      unreachable!("invalid checksum algo");
+  }
+
   // Decrement TTL safely
   if buf[TTL_OFFSET] > 0 {
       buf[TTL_OFFSET] -= 1;
@@ -137,12 +144,6 @@ fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
       buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
   }
 
-  // check
-  let old_checksum_val = checksum_ip4(&buf[..IP_HEADER_LEN]);
-  if buf[CHECKSUM_OFFSET] != ((old_checksum_val >> 8) as u8)
-    || buf[CHECKSUM_OFFSET + 1] != ((old_checksum_val & 0xFF) as u8) {
-      unreachable!("invalid checksum algo");
-  }
 
   // Change source IP
   buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
