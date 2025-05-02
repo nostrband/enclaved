@@ -22,7 +22,7 @@
     nitro-util,
   }: let
     systemBuilder = systemConfig: rec {
-      tun-proxy = import ./vsock_proxy {
+      vsock-proxy = import ./vsock_proxy {
         inherit nixpkgs systemConfig fenix naersk;
       };
     };
