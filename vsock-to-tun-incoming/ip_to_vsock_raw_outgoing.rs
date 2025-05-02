@@ -124,11 +124,11 @@ fn checksum_ip4(data: &[u8]) -> u16 {
 /// Modify source IP and decrement TTL, then recalculate checksum
 fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
   const IP_HEADER_LEN: usize = 20;
-  const SRC_IP_OFFSET: usize = 12;
+  // const SRC_IP_OFFSET: usize = 12;
   const TTL_OFFSET: usize = 8;
   const CHECKSUM_OFFSET: usize = 10;
 
-  let new_ip_bytes = new_source_ip.octets();
+  // let new_ip_bytes = new_source_ip.octets();
 
   // check
   let old_checksum_val = checksum_ip4(&buf[..IP_HEADER_LEN]);
@@ -138,14 +138,15 @@ fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
   }
 
   // Decrement TTL safely
-  // if buf[TTL_OFFSET] > 0 {
-  //     buf[TTL_OFFSET] -= 1;
-  // } else {
-  //     buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
-  // }
+  if buf[TTL_OFFSET] > 0 {
+      buf[TTL_OFFSET] -= 1;
+  } else {
+      buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
+  }
 
   // Change source IP
-  buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
+  // buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
+  println!("skip new ip {:?}", new_source_ip);
 
   // Zero the checksum before recalculating
   // buf[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 2].copy_from_slice(&[0, 0]);
@@ -205,18 +206,22 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
           }
         });
 
-        if src_addr != ip {
-          let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
-          modify_packet(&mut buf, new_ip);
-          let new_src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
-            if acc != "" {
-                acc + "." + &val.to_string()
-            } else {
-                acc + &val.to_string()
-            }
-          });  
-          println!("source_ip changed from {:?} to {:?}: {:02x?} ", src_addr, new_src_addr, &buf);
-        }
+        let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
+        modify_packet(&mut buf, new_ip);
+        println!("skip source_ip change from {:?}: {:02x?} ", src_addr, &buf);
+
+        // if src_addr != ip {
+        //   let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
+        //   modify_packet(&mut buf, new_ip);
+        //   let new_src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+        //     if acc != "" {
+        //         acc + "." + &val.to_string()
+        //     } else {
+        //         acc + &val.to_string()
+        //     }
+        //   });  
+        //   println!("source_ip changed from {:?} to {:?}: {:02x?} ", src_addr, new_src_addr, &buf);
+        // }
 
         // send through vsock
         let mut total_sent = 0;
