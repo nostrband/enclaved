@@ -31,7 +31,7 @@ use clap::Parser;
 use nfq::{Queue, Verdict};
 use socket2::{SockAddr, Socket};
 use std::net::Ipv4Addr;
-// use byteorder::{BigEndian, ByteOrder};
+use byteorder::{BigEndian, ByteOrder};
 
 use oyster_raw_proxy::{
     new_nfq_with_backoff, new_vsock_socket_with_backoff, ProxyError, SocketError, VsockAddrParser,
@@ -48,135 +48,137 @@ struct Cli {
     queue_num: u16,
 }
 
-// // Helper function to calculate the checksum for an IP header
-// fn checksum(data: &[u8]) -> u16 {
-//     let mut sum: u32 = 0;
-
-//     // Process each 16-bit word (2 bytes)
-//     for chunk in data.chunks(2) {
-//         let word = if chunk.len() == 2 {
-//             BigEndian::read_u16(chunk)
-//         } else {
-//             (chunk[0] as u16) << 8
-//         };
-//         sum = sum.wrapping_add(word as u32);
-//     }
-
-//     // Add carry if any
-//     while sum >> 16 != 0 {
-//         sum = (sum & 0xFFFF) + (sum >> 16);
-//     }
-
-//     // Return the one's complement of the sum
-//     !(sum as u16)
-// }
-
-/// Sum all words (16 bit chunks) in the given data. The word at word offset
-/// `skipword` will be skipped. Each word is treated as big endian.
-fn sum_be_words(data: &[u8], skipword: usize) -> u32 {
-  if data.len() == 0 {
-      return 0;
-  }
-  let len = data.len();
-  let mut cur_data = &data[..];
-  let mut sum = 0u32;
-  let mut i = 0;
-  while cur_data.len() >= 2 {
-      if i != skipword {
-          // It's safe to unwrap because we verified there are at least 2 bytes
-          sum += u16::from_be_bytes(cur_data[0..2].try_into().unwrap()) as u32;
-      }
-      cur_data = &cur_data[2..];
-      i += 1;
-  }
-
-  // If the length is odd, make sure to checksum the final byte
-  if i != skipword && len & 1 != 0 {
-      sum += (data[len - 1] as u32) << 8;
-  }
-
-  sum
-}
-
-
-fn finalize_checksum(mut sum: u32) -> u16 {
-  while sum >> 16 != 0 {
-      sum = (sum >> 16) + (sum & 0xFFFF);
-  }
-  !sum as u16
-}
-
-// https://github.com/libpnet/libpnet/blob/main/pnet_packet/src/util.rs#L76
-/// Calculates a checksum. Used by ipv4 and icmp. The two bytes starting at `skipword * 2` will be
-/// ignored. Supposed to be the checksum field, which is regarded as zero during calculation.
-fn checksum_ext(data: &[u8], skipword: usize) -> u16 {
-  if data.len() == 0 {
-      return 0;
-  }
-  let sum = sum_be_words(data, skipword);
-  finalize_checksum(sum)
-}
-
+// Helper function to calculate the checksum for an IP header
 fn checksum_ip4(data: &[u8]) -> u16 {
-  return checksum_ext(data, 5);
+    let mut sum: u32 = 0;
+
+    // Process each 16-bit word (2 bytes)
+    for chunk in data.chunks(2) {
+        let word = if chunk.len() == 2 {
+            BigEndian::read_u16(chunk)
+        } else {
+            (chunk[0] as u16) << 8
+        };
+        sum = sum.wrapping_add(word as u32);
+    }
+
+    // Add carry if any
+    while sum >> 16 != 0 {
+        sum = (sum & 0xFFFF) + (sum >> 16);
+    }
+
+    // Return the one's complement of the sum
+    !(sum as u16)
+}
+
+fn get_ihl(buf: &[u8]) -> u8 {
+  (buf[0] & 0x0F) * 4 // 32-words -> bytes
+}
+
+fn get_proto(buf: &[u8]) -> u8 {
+  buf[9] & 0xFF
+}
+
+fn checksum_tcp4(
+  tcp_segment: &[u8],
+  src_ip: Ipv4Addr,
+  dst_ip: Ipv4Addr,
+) -> u16 {
+  let mut sum: u32 = 0;
+
+  // Pseudo-header
+  for b in src_ip.octets().chunks(2).map(|c| u16::from_be_bytes([c[0], c[1]])) {
+      sum += b as u32;
+  }
+  for b in dst_ip.octets().chunks(2).map(|c| u16::from_be_bytes([c[0], c[1]])) {
+      sum += b as u32;
+  }
+
+  sum += 6; // Protocol number (TCP)
+  sum += (tcp_segment.len() as u32) & 0xFFFF;
+
+  // TCP header + data
+  for chunk in tcp_segment.chunks(2) {
+      let word = if chunk.len() == 2 {
+          u16::from_be_bytes([chunk[0], chunk[1]])
+      } else {
+          u16::from_be_bytes([chunk[0], 0])
+      };
+      sum += word as u32;
+  }
+
+  // Fold 32-bit sum to 16 bits
+  while (sum >> 16) != 0 {
+      sum = (sum & 0xFFFF) + (sum >> 16);
+  }
+
+  !(sum as u16)
 }
 
 /// Modify source IP and decrement TTL, then recalculate checksum
-fn modify_packet(buf: &mut [u8], new_source_ip: Ipv4Addr) {
-  const IP_HEADER_LEN: usize = 20;
-  // const SRC_IP_OFFSET: usize = 12;
+fn modify_packet(
+  buf: &mut [u8],
+  src_ip: Ipv4Addr,
+  dst_ip: Ipv4Addr,
+) {
+  const SRC_IP_OFFSET: usize = 12;
   const TTL_OFFSET: usize = 8;
-  const CHECKSUM_OFFSET: usize = 10;
+  const IP_CHECKSUM_OFFSET: usize = 10;
+  // excluding IP header
+  const TCP_CHECKSUM_OFFSET: usize = 16;
+  const TCP: u8 = 6;
+  const MIN_IP_HEADER_LEN: usize = 20;
+  const MIN_TCP_HEADER_LEN: usize = 20;
 
-  // let new_ip_bytes = new_source_ip.octets();
-
-  // check
-  let old_checksum_val = checksum_ip4(&buf[..IP_HEADER_LEN]);
-  if buf[CHECKSUM_OFFSET] != ((old_checksum_val >> 8) as u8)
-    || buf[CHECKSUM_OFFSET + 1] != ((old_checksum_val & 0xFF) as u8) {
-      unreachable!("invalid checksum algo");
+  let ip_header_length = get_ihl(buf) as usize;
+  if ip_header_length > buf.len() || ip_header_length < MIN_IP_HEADER_LEN {
+    println!("invalid IP packet len {:?}", ip_header_length);
+    return;
   }
 
+  // TCP validate + update checksum
+  if get_proto(buf) == TCP {
+    if (ip_header_length + MIN_TCP_HEADER_LEN) > buf.len() {
+      println!("invalid TCP packet len {:?}", buf.len());
+      return;  
+    }
+
+    let offset = ip_header_length + TCP_CHECKSUM_OFFSET;
+
+    // Zero TCP checksum before recalculating
+    buf[offset..offset + 2].copy_from_slice(&[0, 0]);
+
+    // new checksum
+    let tcp_checksum_val = checksum_tcp4(&buf[ip_header_length..], src_ip, dst_ip);
+
+    // Write new checksum into header
+    buf[offset] = (tcp_checksum_val >> 8) as u8;
+    buf[offset + 1] = (tcp_checksum_val & 0xFF) as u8;
+  }
+
+  // now update IP packet
+  let new_ip_bytes = src_ip.octets();
+
   // Decrement TTL safely
-  if buf[TTL_OFFSET] > 0 {
+  if buf[TTL_OFFSET] > 1 {
       buf[TTL_OFFSET] -= 1;
   } else {
-      buf[TTL_OFFSET] = 0; // Prevent underflow, TTL shouldn't be < 0
+      buf[TTL_OFFSET] = 1; // Prevent underflow, TTL shouldn't be <= 0
   }
 
   // Change source IP
-  // buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
-  println!("skip new ip {:?}", new_source_ip);
+  buf[SRC_IP_OFFSET..SRC_IP_OFFSET + 4].copy_from_slice(&new_ip_bytes);
 
-  // Zero the checksum before recalculating
-  // buf[CHECKSUM_OFFSET..CHECKSUM_OFFSET + 2].copy_from_slice(&[0, 0]);
+  // Zero IP checksum before recalculating
+  buf[IP_CHECKSUM_OFFSET..IP_CHECKSUM_OFFSET + 2].copy_from_slice(&[0, 0]);
 
   // Recalculate checksum over the IP header
-  let checksum_val = checksum_ip4(&buf[..IP_HEADER_LEN]);
+  let checksum_val = checksum_ip4(&buf[..ip_header_length]);
 
   // Write new checksum into header
-  buf[CHECKSUM_OFFSET] = (checksum_val >> 8) as u8;
-  buf[CHECKSUM_OFFSET + 1] = (checksum_val & 0xFF) as u8;
+  buf[IP_CHECKSUM_OFFSET] = (checksum_val >> 8) as u8;
+  buf[IP_CHECKSUM_OFFSET + 1] = (checksum_val & 0xFF) as u8;
 }
-
-// fn main() {
-//     // Example packet in byte buffer (IPv4 packet with source IP 192.168.1.1)
-//     let mut buf: Vec<u8> = vec![
-//         0x45, 0x00, 0x00, 0x3c, 0x1c, 0x46, 0x40, 0x00, 0x40, 0x06, 0x39, 0x10, // IP Header (part)
-//         0xc0, 0xa8, 0x01, 0x01, // Old source IP: 192.168.1.1
-//         0x8c, 0x3a, 0x2a, 0x12, // Destination IP (example)
-//         // (other parts of the packet follow...)
-//     ];
-
-//     // Define the new source IP
-//     let new_source_ip = Ipv4Addr::new(10, 0, 0, 1); // 10.0.0.1
-
-//     // Modify the packet
-//     modify_ip_packet(&mut buf, new_source_ip);
-
-//     // Print the modified packet (in hexadecimal form)
-//     println!("{:x?}", buf);
-// }
 
 fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<(), ProxyError> {
     loop {
@@ -206,22 +208,20 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
           }
         });
 
-        let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
-        modify_packet(&mut buf, new_ip);
-        println!("skip source_ip change from {:?}: {:02x?} ", src_addr, &buf);
+        if src_addr != ip {
+          let src_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
+          let dst_ip: Ipv4Addr = dst_addr.parse().expect("Invalid IP address");
+          modify_packet(&mut buf, src_ip, dst_ip);
 
-        // if src_addr != ip {
-        //   let new_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
-        //   modify_packet(&mut buf, new_ip);
-        //   let new_src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
-        //     if acc != "" {
-        //         acc + "." + &val.to_string()
-        //     } else {
-        //         acc + &val.to_string()
-        //     }
-        //   });  
-        //   println!("source_ip changed from {:?} to {:?}: {:02x?} ", src_addr, new_src_addr, &buf);
-        // }
+          let new_src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+            if acc != "" {
+                acc + "." + &val.to_string()
+            } else {
+                acc + &val.to_string()
+            }
+          });  
+          println!("source_ip changed from {:?} to {:?}: {:02x?} ", src_addr, new_src_addr, &buf);
+        }
 
         // send through vsock
         let mut total_sent = 0;
