@@ -81,9 +81,9 @@ COPY ./enclave*.sh .
 COPY ./supervisord.conf .
 
 # test app - remove later
-#COPY ./test-app/build/test.tar .
+COPY ./test-app/build/test.tar .
 #COPY ./test-app/echo-server .
-COPY ./busybox.tar .
+#COPY ./busybox.tar .
 
 # enclaved app
 # Copy only package-related files first

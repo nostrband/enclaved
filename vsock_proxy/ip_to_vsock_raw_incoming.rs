@@ -61,14 +61,14 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue) -> Result<(), ProxyE
 
         let buf = msg.get_payload_mut();
 
-        let src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
-          if acc != "" {
-              acc + "." + &val.to_string()
-          } else {
-              acc + &val.to_string()
-          }
-        });
-        println!("incoming {:?} from {:?}: {:02x?}", buf.len(), src_addr, &buf);
+        // let src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
+        //   if acc != "" {
+        //       acc + "." + &val.to_string()
+        //   } else {
+        //       acc + &val.to_string()
+        //   }
+        // });
+        // println!("incoming {:?} from {:?}: {:02x?}", buf.len(), src_addr, &buf);
 
         // send
         let mut total_sent = 0;

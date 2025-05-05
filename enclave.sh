@@ -23,8 +23,6 @@ cd /enclaved
 ./enclave-network-setup.sh
 
 # required by vsock utils
-#mkdir -p /nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66/lib/
-#ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/maxa3xhmxggrc5v2vc0c3pjb79hjlkp9-glibc-2.40-66/lib/ld-linux-x86-64.so.2
 mkdir -p /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/
 ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/ld-linux-x86-64.so.2
 
@@ -70,15 +68,15 @@ curl -v https://google.com
 
 
 # TEST DOCKER
-#docker load < test.tar
+docker load < test.tar
 #docker load < etest.tar
-#docker image ls
-#docker info
+docker image ls
+docker info
 
 # try on docker
 #docker run --network="host" etest:latest & 
 #sleep 2
-#docker run -p 3000:3000 test:latest &
+docker run 7f8dcc3ae368 
 
 #sleep 2
 
@@ -103,7 +101,7 @@ curl -v https://google.com
 
 #set +e
 
-docker load < busybox.tar
+#docker load < busybox.tar
 
 echo "IPTABLES"
 iptables-save
@@ -132,7 +130,7 @@ sleep 1
 # FIXME add separate policy for each container to avoid
 # port collisions
 # --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro
-docker run -it --rm busybox wget http://65.109.67.137
+#docker run -it --rm busybox wget http://65.109.67.137
 #docker run -it --rm busybox wget https://google.com
 
 echo "nat2"
