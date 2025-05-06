@@ -214,7 +214,7 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
           }
         });
 
-        println!("outgoing {:?} from {:?} to {:?}: {:02x?} ", size, src_addr, dst_addr, &buf);
+        println!("outgoing {:?} from {:?} to {:?}: {:02x?} ", size, src_addr, dst_addr, &buf[0..20]);
 
         if src_addr != ip {
           let src_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
