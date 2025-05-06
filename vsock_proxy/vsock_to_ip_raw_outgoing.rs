@@ -37,7 +37,7 @@
 use std::ffi::CStr;
 use std::io::Read;
 use std::net::SocketAddrV4;
-// use std::net::Ipv4Addr;
+use std::net::Ipv4Addr;
 
 use anyhow::{anyhow, Context};
 use clap::Parser;
