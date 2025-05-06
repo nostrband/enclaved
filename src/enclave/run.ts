@@ -9,6 +9,7 @@ import { nsmInit } from "../nsm";
 global.WebSocket ??= WebSocket;
 
 // used to launch the process inside the enclave
-const parentPort = Number(process.argv?.[3]) || 1080;
+const parentPort = Number(process.argv?.[3]) || 2080;
 const relayUrl = process.argv?.[4] || "wss://relay.primal.net";
-startEnclave({ parentPort, relayUrl });
+const dir = process.argv?.[5] || "/enclaved_data";
+startEnclave({ parentPort, relayUrl, dir });

@@ -15,7 +15,7 @@ import {
 } from "nostr-tools";
 import readline from "node:readline";
 import { Nip46Client } from "../nip46-client";
-import { now } from "../utils";
+import { getIP, now } from "../utils";
 import { fetchOutboxRelays, rawEvent } from "./utils";
 import { Relay } from "../relay";
 import { Signer } from "../types";
@@ -105,7 +105,7 @@ async function ping({
   console.log("ping", Date.now() - start, "ms");
 }
 
-async function getIP({ port }: { port: number }) {
+async function parentGetIP({ port }: { port: number }) {
   const client = new ParentClient(port);
   const r = await client.getIP();
   console.log(r.ip);
@@ -322,14 +322,14 @@ export function mainCli(argv: string[]) {
 
   const method = argv[0];
   switch (method) {
-    case "ping": {
-      const relayUrl = argv[1];
-      const adminPubkey = argv[2];
-      return ping({ relayUrl, adminPubkey });
-    }
     case "get_ip": {
-      const port = Number(argv[1]) || 1080;
-      return getIP({ port });
+      const ip = getIP();
+      console.log("ip", ip);
+      return Promise.resolve();
+    }
+    case "parent_get_ip": {
+      const port = Number(argv[1]) || 2080;
+      return parentGetIP({ port });
     }
     case "sign_build": {
       const dir = argv?.[1] || "./build/";

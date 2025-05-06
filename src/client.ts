@@ -48,7 +48,7 @@ export class Client {
     timeout = 30000,
   }: {
     method: string;
-    params: string[];
+    params: any;
     timeout?: number;
   }) {
     if (!this.privkey || !this.signerPubkey) throw new Error("Not started");

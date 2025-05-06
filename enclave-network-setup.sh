@@ -4,19 +4,17 @@
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
+ip=`./node_modules/.bin/tsx src/index.ts cli parent_get_ip | tail -n 1`
+
 # FIXME take IP from parent
 # query ip of instance and store
-ip=172.31.43.219
+#ip=172.31.43.219
 echo "IP $ip"
 
 # required by vsock-to-ip-raw-incoming
 echo $ip > /app/ip.txt
 #/app/vet --url vsock://3:1300/instance/ip > /app/ip.txt
 #cat /app/ip.txt && echo
-
-# set up loopback
-ip addr add 127.0.0.1/8 dev lo
-ip link set lo up
 
 # set up bridge for routing host traffic
 #ip link add name br0 type bridge
@@ -52,10 +50,12 @@ cat /etc/docker/daemon.json
 
 # set ephemeral port range
 cat > /etc/sysctl.conf <<EOF
-# this port range is mapped from the enclave to the parent
-# and can be used to connect to the internet
-net.ipv4.ip_local_port_range=1024 9999 
-#61439
+# 1024:61439 is the port range mapped from enclave 
+# to the parent and the internet, 
+# we limit host's range to these ports and then give
+# each container their own range to make sure they all
+# don't collide due to our rudimentary NAT
+net.ipv4.ip_local_port_range=1024 4999
 # we need this for forwarding traffic from docker containers
 net.ipv4.ip_forward=1
 # enable conntrack logging
@@ -63,6 +63,10 @@ net.netfilter.nf_conntrack_log_invalid=1
 # disable rp_filter
 net.ipv4.conf.tun0.rp_filter=0
 net.ipv4.conf.all.rp_filter=0
+# disable ipv6 - we don't support it yet
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
 
 # apply the above changes

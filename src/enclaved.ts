@@ -3,14 +3,14 @@ import { now } from "./utils";
 import { KIND_ENCLAVED } from "./consts";
 import { Signer } from "./types";
 
-interface Request {
+export interface Request {
   pubkey: string;
   id: string;
   method: string;
   params: any;
 }
 
-interface Reply {
+export interface Reply {
   id: string;
   result?: any;
   error?: string;
@@ -27,44 +27,21 @@ export class EnclavedServer {
     return this.signer;
   }
 
-  protected async payInvoice(req: Request, res: Reply) {
-    throw new Error("Method not implemented");
+  protected async ping(req: Request, res: Reply) {
+    res.id = req.id;
+    res.result = "pong";
   }
 
-  protected async makeInvoice(req: Request, res: Reply) {
-    throw new Error("Method not implemented");
-  }
-
-  protected async makeInvoiceFor(req: Request, res: Reply) {
-    throw new Error("Method not implemented");
-  }
-
-  protected async listTransactions(req: Request, res: Reply) {
-    throw new Error("Method not implemented");
-  }
-
-  protected async getBalance(req: Request, res: Reply) {
-    throw new Error("Method not implemented");
-  }
-
-  protected async getInfo(req: Request, res: Reply) {
+  protected async launch(req: Request, res: Reply) {
     throw new Error("Method not implemented");
   }
 
   private async handle(req: Request, res: Reply) {
     switch (req.method) {
-      case "pay_invoice":
-        return this.payInvoice(req, res);
-      case "make_invoice":
-        return this.makeInvoice(req, res);
-      case "make_invoice_for":
-        return this.makeInvoiceFor(req, res);
-      case "list_transactions":
-        return this.listTransactions(req, res);
-      case "get_balance":
-        return this.getBalance(req, res);
-      case "get_info":
-        return this.getInfo(req, res);
+      case "ping":
+        return this.ping(req, res);
+      case "launch":
+        return this.launch(req, res);
       default:
         throw new Error("Invalid method");
     }
@@ -72,8 +49,7 @@ export class EnclavedServer {
 
   private isValidReq(req: Request) {
     let valid = false;
-    switch (
-      req.method
+    switch (req.method) {
       // case "pay_invoice":
       //   valid = !!req.params.invoice && typeof req.params.invoice === "string";
       //   break;
@@ -97,7 +73,8 @@ export class EnclavedServer {
       // case "get_info":
       //   valid = true;
       //   break;
-    ) {
+      default:
+        valid = true;
     }
 
     return valid;

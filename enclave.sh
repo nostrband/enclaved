@@ -9,6 +9,15 @@ set -e
 # work dir
 cd /enclaved
 
+# check PRNG, make sure it uses nsm
+echo "rng_current:"
+RNG=`cat /sys/devices/virtual/misc/hw_random/rng_current`
+echo $RNG
+if [ "$RNG" != "nsm-hwrng" ]; then
+  echo "Bad random number generator"
+  exit -1
+fi
+
 # some info for debugging
 # pwd
 # free
@@ -16,15 +25,9 @@ cd /enclaved
 # ls -l
 # ls -l /
 
-# disk
-./enclave-disk-setup.sh 
-
-# setup network
-./enclave-network-setup.sh
-
-# required by vsock utils
-mkdir -p /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/
-ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/ld-linux-x86-64.so.2
+# set up loopback first
+ip addr add 127.0.0.1/8 dev lo
+ip link set lo up
 
 # Run supervisor first, no programs should be running yet
 cat supervisord.conf
@@ -33,6 +36,19 @@ SUPERVISOR_PID=$!
 sleep 1
 echo "status"
 ./supervisord ctl -c supervisord.conf status
+
+# start proxy to parent
+./supervisord ctl -c supervisord.conf start socat
+
+# setup disk
+./enclave-disk-setup.sh 
+
+# setup network (after we started socat and asked parent for our IP)
+./enclave-network-setup.sh
+
+# required by vsock utils
+mkdir -p /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/
+ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/ld-linux-x86-64.so.2
 
 # start proxies
 ./supervisord ctl -c supervisord.conf start ip-to-vsock-raw-outgoing
@@ -50,33 +66,47 @@ until docker info >/dev/null 2>&1; do
     sleep 1
 done
 
-# delete default docker rule that we'll override
+# delete default docker rule that we override
 iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 
-# start docker compose
-#/app/supervisord ctl -c /etc/supervisord.conf start compose
+# skopeo used as docker image,
+# needed to check docker image info
+# FIXME replace with proper API access
+#docker pull quay.io/skopeo/stable:latest #sha256:8bee970d8dbe1260526f18f99709e8323b640c8b7c0cba27da5ccf622cad47cb
 
+# Finally, start the enclaved process
+./supervisord ctl -c supervisord.conf start enclaved
+
+tcpdump -i tun0 &
+
+
+# docker load < nwc-enclaved.tar
+# docker image ls
+# docker info
+
+# # try on docker
+# docker run -it --rm nwc-enclaved:latest 
 
 # start phoenixd
 #./supervisord ctl -c supervisord.conf start phoenixd
 
 # test networking
-curl -v http://65.109.67.137
+#curl -v http://65.109.67.137
 
 # test dns and networking
-curl -v https://google.com
+#curl -v https://google.com
 
 
 # TEST DOCKER
-docker load < test.tar
+#docker load < test.tar
 #docker load < etest.tar
-docker image ls
-docker info
+#docker image ls
+#docker info
 
 # try on docker
 #docker run --network="host" etest:latest & 
 #sleep 2
-docker run 7f8dcc3ae368 
+#docker run 7f8dcc3ae368 
 
 #sleep 2
 
@@ -94,6 +124,7 @@ docker run 7f8dcc3ae368
 
 #./echo-server &
 
+
 #docker pull nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
 #docker image ls
 # bind /etc/sysctl.conf to make sure our settings of ephemeral ports are copied to the container
@@ -103,56 +134,56 @@ docker run 7f8dcc3ae368
 
 #docker load < busybox.tar
 
-echo "IPTABLES"
-iptables-save
-echo "=================="
+# echo "IPTABLES"
+# iptables-save
+# echo "=================="
 
-#docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox ip route # telnet 3.33.236.230 9735
-iptables -Z FORWARD
-#tcpdump -i docker0 -n -v &
-ls /proc/net/nf_conntrack
-tcpdump -i tun0 -XX &
+# #docker run -it --rm --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro busybox ip route # telnet 3.33.236.230 9735
+# iptables -Z FORWARD
+# #tcpdump -i docker0 -n -v &
+# ls /proc/net/nf_conntrack
+# tcpdump -i tun0 -XX &
 
-echo "nat1"
-iptables -t nat -nvL POSTROUTING
-iptables -t nat -nvL PREROUTING
-echo "mangle1"
-iptables -t mangle -nvL 
-echo "filter1"
-iptables -t filter -nvL OUTPUT
-echo "nfqueue1"
-cat /proc/net/netfilter/nfnetlink_queue
-echo "conntrack1"
-cat /proc/net/nf_conntrack 
-conntrack -E -p tcp &
+# echo "nat1"
+# iptables -t nat -nvL POSTROUTING
+# iptables -t nat -nvL PREROUTING
+# echo "mangle1"
+# iptables -t mangle -nvL 
+# echo "filter1"
+# iptables -t filter -nvL OUTPUT
+# echo "nfqueue1"
+# cat /proc/net/netfilter/nfnetlink_queue
+# echo "conntrack1"
+# cat /proc/net/nf_conntrack 
+# conntrack -E -p tcp &
 
-sleep 1
-# FIXME add separate policy for each container to avoid
-# port collisions
-# --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro
-#docker run -it --rm busybox wget http://65.109.67.137
-#docker run -it --rm busybox wget https://google.com
+# sleep 1
+# # FIXME add separate policy for each container to avoid
+# # port collisions
+# # --mount type=bind,src=/etc/sysctl.conf,dst=/etc/sysctl.conf,ro
+# #docker run -it --rm busybox wget http://65.109.67.137
+# #docker run -it --rm busybox wget https://google.com
 
-echo "nat2"
-iptables -t nat -nvL POSTROUTING
-iptables -t nat -nvL PREROUTING
-echo "mangle2"
-iptables -t mangle -nvL 
-echo "filter2"
-iptables -t filter -nvL OUTPUT
-echo "nfqueue1"
-cat /proc/net/netfilter/nfnetlink_queue
-echo "conntrack2"
-conntrack -L conntrack 
-echo "conntrack2"
-cat /proc/net/nf_conntrack 
+# echo "nat2"
+# iptables -t nat -nvL POSTROUTING
+# iptables -t nat -nvL PREROUTING
+# echo "mangle2"
+# iptables -t mangle -nvL 
+# echo "filter2"
+# iptables -t filter -nvL OUTPUT
+# echo "nfqueue1"
+# cat /proc/net/netfilter/nfnetlink_queue
+# echo "conntrack2"
+# conntrack -L conntrack 
+# echo "conntrack2"
+# cat /proc/net/nf_conntrack 
 
-dmesg | grep iptables
-dmesg | grep conntrack
+# dmesg | grep iptables
+# dmesg | grep conntrack
 
-cat /proc/net/dev
+# cat /proc/net/dev
 
-echo "all done"
+echo "all started"
 wait $SUPERVISOR_PID
 
 

@@ -79,10 +79,14 @@ export class ParentClient {
   }
 
   getIP() {
-    return this.call<{ ip: string }>("ip", []);
+    return this.call<{ ip: string }>("get_ip", []);
   }
 
-  async start() {
+  getConf() {
+    return this.call<any>("get_conf", []);
+  }
+
+  async getMeta() {
     const att = nsmGetAttestation();
     if (!att) {
       return {};
@@ -90,7 +94,7 @@ export class ParentClient {
 
     const attData = nsmParseAttestation(att);
     const { build, instance, instanceAnnounceRelays, prod } =
-      await this.call<InstanceInfo>("start", [att.toString("base64")]);
+      await this.call<InstanceInfo>("get_meta", [att.toString("base64")]);
     if (!build || !instance) throw new Error("Bad reply");
 
     const notDebug = !!attData.pcrs.get(0)!.find((c) => c !== 0);

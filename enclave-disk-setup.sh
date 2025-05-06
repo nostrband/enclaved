@@ -22,3 +22,7 @@ df
 # make sure docker uses xfs
 mkdir /mnt/xfs/docker
 ln -s /mnt/xfs/docker /var/lib/docker
+
+# make sure our process uses this disk too
+mkdir /mnt/xfs/data
+ln -s /mnt/xfs/data /enclaved_data

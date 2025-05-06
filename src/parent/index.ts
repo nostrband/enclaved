@@ -1,10 +1,10 @@
 import { RawData, WebSocket, WebSocketServer } from "ws";
 import fs from "node:fs";
-import { networkInterfaces } from "os";
 import { validateEvent, verifyEvent } from "nostr-tools";
 import { nsmParseAttestation } from "../nsm";
 import { verifyBuild, verifyInstance } from "../aws";
 import { fetchOutboxRelays } from "../cli/utils";
+import { getIP } from "../utils";
 
 interface Rep {
   id: string;
@@ -45,7 +45,7 @@ class ParentServer {
     ws.on("message", (data) => self.onMessage(ws, data));
   }
 
-  private async handleStart(params: string[]) {
+  private async getMeta(params: string[]) {
     const att = Buffer.from(params[0], "base64");
     console.log("start att", att);
 
@@ -71,28 +71,19 @@ class ParentServer {
     });
   }
 
-  private getIP() {
-    const nets: any = networkInterfaces();
-    console.log("nets", nets);
-    for (const name of Object.keys(nets)) {
-      if (!name.startsWith("ens")) continue;
-      for (const net of nets[name]) {
-        // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
-        // 'IPv4' is in Node <= 17, from 18 it's a number 4 or 6
-        const familyV4Value = typeof net.family === "string" ? "IPv4" : 4;
-        if (net.family === familyV4Value && !net.internal) {
-          return net.address;
-        }
-      }
-    }
-    return undefined;
-  }
-
-  private async handleIP() {
-    const ip = this.getIP();
+  private async getIP() {
+    const ip = getIP();
     if (!ip) throw new Error("Failed to get IP");
     return JSON.stringify({
       ip,
+    });
+  }
+
+  private async getConf() {
+    const conf = JSON.parse(fs.readFileSync("enclaved.conf").toString("utf8"));
+    if (!conf) throw new Error("Failed to get conf");
+    return JSON.stringify({
+      conf,
     });
   }
 
@@ -107,11 +98,14 @@ class ParentServer {
         result: "",
       };
       switch (req.method) {
-        case "ip":
-          rep.result = await this.handleIP();
+        case "get_ip":
+          rep.result = await this.getIP();
           break;
-        case "start":
-          rep.result = await this.handleStart(req.params);
+        case "get_conf":
+          rep.result = await this.getConf();
+          break;
+        case "get_meta":
+          rep.result = await this.getMeta(req.params);
           break;
         default:
           throw new Error("Unknown method");

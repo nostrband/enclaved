@@ -24,35 +24,37 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     socat=1.7.4.1-3ubuntu4 \
     ipset=7.15-1build1 \
     unzip=6.0-26ubuntu3.2 \
-    iptables=1.8.7-1ubuntu5.2 \
-    net-tools=1.60+git20181103.0eebece-1ubuntu5 \
     iproute2=5.15.0-1ubuntu2 \
+    net-tools=1.60+git20181103.0eebece-1ubuntu5 \
+    iptables=1.8.7-1ubuntu5.2 \
     "docker-ce=5:28.0.4-1~ubuntu.22.04~jammy" \
     "docker-ce-cli=5:28.0.4-1~ubuntu.22.04~jammy" \
+    docker-compose=1.29.2-1 \
     containerd.io=1.7.27-1 \
     rclone=1.53.3-4ubuntu1.22.04.3 \
     xfsprogs=5.13.0-1ubuntu2.1 \
-    "conntrack=1:1.4.6-2build2" \
-    bridge-utils \
-    iputils-ping \
-    tcpdump \
-    nodejs=23.11.0-1nodesource1
+    socat=1.7.4.1-3ubuntu4 \
+    nodejs=23.11.0-1nodesource1 \
+    tcpdump 
 
-# FIXME remove conntrack and bridge-utils
-#RUN apt show conntrack
+    # "conntrack=1:1.4.6-2build2" \
+    # bridge-utils \
+    # iputils-ping \
+
+#RUN apt show skopeo
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
 
 
 # phoenix as separate user, it crashes if launched
 # as root in our setup
-RUN useradd -m phoenix
-WORKDIR /home/phoenix
-RUN wget https://github.com/ACINQ/phoenixd/releases/download/v0.5.1/phoenixd-0.5.1-linux-x64.zip
-RUN sha256sum ./phoenixd-0.5.1-linux-x64.zip | grep 0ad77df5692babfc6d53f72d7aaa6ce27fffce750beea9a4965c4fad6805f0af
-RUN unzip -j phoenixd-0.5.1-linux-x64.zip
-RUN rm phoenixd-0.5.1-linux-x64.zip phoenix-cli
-RUN chown -R phoenix:phoenix *
+# RUN useradd -m phoenix
+# WORKDIR /home/phoenix
+# RUN wget https://github.com/ACINQ/phoenixd/releases/download/v0.5.1/phoenixd-0.5.1-linux-x64.zip
+# RUN sha256sum ./phoenixd-0.5.1-linux-x64.zip | grep 0ad77df5692babfc6d53f72d7aaa6ce27fffce750beea9a4965c4fad6805f0af
+# RUN unzip -j phoenixd-0.5.1-linux-x64.zip
+# RUN rm phoenixd-0.5.1-linux-x64.zip phoenix-cli
+# RUN chown -R phoenix:phoenix *
 
 # other binaries
 WORKDIR /enclaved
@@ -81,9 +83,10 @@ COPY ./enclave*.sh .
 COPY ./supervisord.conf .
 
 # test app - remove later
-COPY ./test-app/build/test.tar .
+#COPY ./test-app/build/test.tar .
 #COPY ./test-app/echo-server .
 #COPY ./busybox.tar .
+#COPY ./nwc-enclaved.tar .
 
 # enclaved app
 # Copy only package-related files first
