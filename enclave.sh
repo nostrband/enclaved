@@ -66,8 +66,11 @@ until docker info >/dev/null 2>&1; do
     sleep 1
 done
 
+docker network create enclaves -o com.docker.network.bridge.name=enclaves
+
 # delete default docker rule that we override
 iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
+iptables -t nat -D POSTROUTING -s 172.18.0.0/16 ! -o enclaves -j MASQUERADE
 
 # skopeo used as docker image,
 # needed to check docker image info
@@ -80,12 +83,21 @@ iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 tcpdump -i tun0 &
 
 
-# docker load < nwc-enclaved.tar
+# docker load < busybox.tar
 # docker image ls
 # docker info
+# docker network ls
 
-# # try on docker
-# docker run -it --rm nwc-enclaved:latest 
+# try on docker
+#docker run -it --rm busybox wget http://nos.lol
+# docker-compose -f compose.yaml up -d
+# sleep 1
+
+
+# ifconfig
+# iptables-save
+
+# docker-compose -f compose.yaml down
 
 # start phoenixd
 #./supervisord ctl -c supervisord.conf start phoenixd

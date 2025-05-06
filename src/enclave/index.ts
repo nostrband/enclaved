@@ -73,6 +73,11 @@ services:
   main:
     image: ${req.params.docker}
     restart: unless-stopped
+
+networks:
+  default:
+    external: true
+    name: enclaves
     `;
     console.log("compose", compose);
     const composePath = path + "/compose.yaml";

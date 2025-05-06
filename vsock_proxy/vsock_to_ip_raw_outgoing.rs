@@ -130,7 +130,7 @@ fn handle_conn(
             continue;
         }
 
-        println!("outgoing {:?} to {:?}: {:02x?}", size, Ipv4Addr::from(dst_addr).to_string(), &buf[..size]);
+        // println!("outgoing {:?} to {:?}: {:02x?}", size, Ipv4Addr::from(dst_addr).to_string(), &buf[..size]);
 
         // https://en.wikipedia.org/wiki/Reserved_IP_addresses
         // ignore packets sent to

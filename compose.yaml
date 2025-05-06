@@ -2,6 +2,13 @@ services:
   test:
     image: busybox
     restart: unless-stopped
+    command: top
+
+networks:
+  default:
+    external: true
+    name: enclaves
+
 #    ports:
 #      - "443:8043"
 #    networks:

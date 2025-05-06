@@ -107,6 +107,8 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # first we set the mark docker docker packets
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j MARK --set-mark 1
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-mark
+iptables -t mangle -A FORWARD -s 172.18.0.0/16 ! -o enclaves -j MARK --set-mark 1
+iptables -t mangle -A FORWARD -s 172.18.0.0/16 ! -o enclaves -j CONNMARK --save-mark
 # then we NAT them and change source IP to $ip and conntrack them,
 # delete default docker rule and set our own rule using simpler SNAT and limiting 
 # source ports from docker to make sure they don't collide with host's ports
@@ -114,6 +116,7 @@ iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-m
 # NOTE: docker deletion will happen after docker is started in enclave.sh
 #iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -p tcp -j SNAT --to-source $ip:10000-61439
+iptables -t nat -A POSTROUTING -s 172.18.0.0/16 ! -o enclaves -p tcp -j SNAT --to-source $ip:10000-61439
 # since we can't forward to NFQUEUE after POSTROUTING
 # we have to loop these packets back to kernel
 # for second pass of rule matching

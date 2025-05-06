@@ -85,7 +85,8 @@ COPY ./supervisord.conf .
 # test app - remove later
 #COPY ./test-app/build/test.tar .
 #COPY ./test-app/echo-server .
-#COPY ./busybox.tar .
+COPY ./busybox.tar .
+COPY ./compose.yaml .
 #COPY ./nwc-enclaved.tar .
 
 # enclaved app
