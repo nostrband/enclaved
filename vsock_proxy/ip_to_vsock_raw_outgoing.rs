@@ -206,8 +206,6 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
           }
         });
 
-        // println!("outgoing {:?} to {:?}: {:02x?} ", size, dst_addr, &buf);
-
         let src_addr = buf[12..16].iter().fold(String::new(), |acc, val| {
           if acc != "" {
               acc + "." + &val.to_string()
@@ -215,6 +213,8 @@ fn handle_conn(conn_socket: &mut Socket, queue: &mut Queue, ip: &str) -> Result<
               acc + &val.to_string()
           }
         });
+
+        println!("outgoing {:?} from {:?} to {:?}: {:02x?} ", size, src_addr, dst_addr, &buf);
 
         if src_addr != ip {
           let src_ip: Ipv4Addr = ip.parse().expect("Invalid IP address");
