@@ -9,6 +9,17 @@ set -e
 # work dir
 cd /enclaved
 
+# some info
+pwd
+uname -a
+cat /etc/*release*
+date
+free
+df
+ls -l
+ls -l /
+ls -l /dev/
+
 # check PRNG, make sure it uses nsm
 echo "rng_current:"
 RNG=`cat /sys/devices/virtual/misc/hw_random/rng_current`
@@ -17,13 +28,6 @@ if [ "$RNG" != "nsm-hwrng" ]; then
   echo "Bad random number generator"
   exit -1
 fi
-
-# some info for debugging
-# pwd
-# free
-# df
-# ls -l
-# ls -l /
 
 # set up loopback first
 ip addr add 127.0.0.1/8 dev lo
@@ -72,6 +76,9 @@ docker network create enclaves -o com.docker.network.bridge.name=enclaves
 iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 iptables -t nat -D POSTROUTING -s 172.18.0.0/16 ! -o enclaves -j MASQUERADE
 
+# print the rules
+iptables-save
+
 # skopeo used as docker image,
 # needed to check docker image info
 # FIXME replace with proper API access
@@ -80,7 +87,7 @@ iptables -t nat -D POSTROUTING -s 172.18.0.0/16 ! -o enclaves -j MASQUERADE
 # Finally, start the enclaved process
 ./supervisord ctl -c supervisord.conf start enclaved
 
-tcpdump -i tun0 &
+# tcpdump -i tun0 &
 
 
 # docker load < busybox.tar

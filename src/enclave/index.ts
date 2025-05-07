@@ -3,91 +3,96 @@ import { EnclavedServer, Reply, Request } from "../enclaved";
 import { RequestListener } from "../listeners";
 import { ParentClient } from "../parent-client";
 import { Relay } from "../relay";
-import { generateSecretKey, getPublicKey, Event, nip19 } from "nostr-tools";
+import { generateSecretKey, getPublicKey, Event } from "nostr-tools";
 import { Signer } from "../types";
 import { PrivateKeySigner } from "../signer";
-import { exec } from "../utils";
-import fs from "node:fs";
+import { launch } from "../compose";
+import { DB } from "../db";
+import { bytesToHex } from "@noble/hashes/utils";
+import { MIN_PORTS_FROM, PORTS_PER_CONTAINER } from "../consts";
 
 // forward NWC calls to wallets
 class Server extends EnclavedServer {
   private dir: string;
-  constructor(dir: string, signer: Signer) {
+  private conf: any;
+  private db: DB;
+
+  constructor(dir: string, conf: any, signer: Signer) {
     super(signer);
     this.dir = dir;
+    this.conf = conf;
+    this.db = new DB(dir + "/containers.db");
   }
 
-  private async checkImage(image: string) {
-    const args = [
-      "run",
-      "--rm",
-      "quay.io/skopeo/stable",
-      "inspect",
-      `docker://docker.io/${image}`,
-    ];
-
-    // format nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
-    const { out, err, code } = await exec("docker", args);
-    if (code !== 0) throw new Error("Failed to fetch docker image");
-
-    try {
-      const info = JSON.parse(out);
-      let size = 0;
-      for (const d of info.LayersData) {
-        size += d.Size;
-      }
-      console.log(new Date(), "docker", image, "size", size);
-      if (size > 300000000) throw new Error("Image too big");
-    } catch (e) {
-      console.error(new Date(), "Bad docker info", image, out, e);
-      throw new Error("Failed to parse image info");
+  public async start() {
+    if (this.conf.builtin) {
+      console.log("builtin", this.conf.builtin);
+      await this.startBuiltin(this.conf.builtin);
     }
   }
 
-  private async composeUp(params: { path: string; up: boolean; dry: boolean }) {
-    await exec("docker-compose", ["--help"]);
+  private createContainerFromParams(params: any, isBuiltin: boolean) {
+    const key = generateSecretKey();
+    const maxPortsFrom = this.db.getMaxPortsFrom();
+    const portsFrom = maxPortsFrom
+      ? maxPortsFrom + PORTS_PER_CONTAINER
+      : MIN_PORTS_FROM;
+    return {
+      id: 0,
+      deployed: false,
+      isBuiltin,
+      paidUntil: 0,
+      portsFrom,
+      pubkey: getPublicKey(key),
+      seckey: key,
+      units: params.units || 1,
+      adminPubkey: "",
+      docker: params.docker,
+      env: params.env ? JSON.stringify(params.env) : undefined,
+      name: params.name,
+    };
+  }
 
-    const path = params.path + "/compose.yaml";
-    const args = ["-f", path];
-    if (params.up) args.push("up");
-    else args.push("down");
-    if (params.dry) args.push("--dry-run");
-    const { code } = await exec("docker-compose", args);
-    if (code !== 0) throw new Error("Failed to run docker compose");
+  private async startBuiltin(c: any[]) {
+    for (const params of c) {
+      console.log("launch builtin", params);
+      if (!params.name) throw new Error("Name not specified for builtin");
+
+      let c = this.db.getNamedContainer(params.name);
+      if (!c) {
+        c = this.createContainerFromParams(params, true);
+        console.log("new builtin", params.name, c.pubkey, c.portsFrom);
+      } else {
+        console.log("existing builtin", params.name, c.pubkey, c.portsFrom);
+      }
+
+      await launch({
+        ...params,
+        dir: this.dir,
+        key: c.seckey,
+      });
+
+      // mark as deployed
+      c.deployed = true;
+      this.db.upsertContainer(c);
+    }
   }
 
   protected async launch(req: Request, res: Reply) {
     if (!req.params.docker) throw new Error("Specify docker url");
+    throw new Error("Now implemented yet");
+    // FIXME check params
 
-    // await this.checkImage(req.params.docker);
+    // const key = generateSecretKey();
+    // const pubkey = await launch({
+    //   ...req.params,
+    //   dir: this.dir,
+    //   key,
+    // });
 
-    const key = generateSecretKey();
-    const pubkey = getPublicKey(key);
-    const path = this.dir + "/metadata/" + pubkey;
-    fs.mkdirSync(path, { recursive: true });
-    fs.writeFileSync(path + "/key.sk", nip19.nsecEncode(key));
-
-    // name: ${nip19.npubEncode(pubkey).substring(0, 10)}
-    const compose = `
-services:
-  main:
-    image: ${req.params.docker}
-    restart: unless-stopped
-
-networks:
-  default:
-    external: true
-    name: enclaves
-    `;
-    console.log("compose", compose);
-    const composePath = path + "/compose.yaml";
-    fs.writeFileSync(composePath, compose);
-
-    await this.composeUp({ path, up: true, dry: false });
-
-    res.result = {
-      pubkey,
-    };
+    // res.result = {
+    //   pubkey,
+    // };
   }
 }
 
@@ -96,6 +101,7 @@ export async function startEnclave(opts: {
   parentPort: number;
   dir: string;
 }) {
+  console.log("opts", opts);
   const parent = new ParentClient(opts.parentPort);
   const conf = await parent.getConf();
   console.log("conf", conf);
@@ -111,7 +117,8 @@ export async function startEnclave(opts: {
   const servicePubkey = getPublicKey(servicePrivkey);
   console.log("adminPubkey", servicePubkey);
 
-  const server = new Server(opts.dir, serviceSigner);
+  const server = new Server(opts.dir, conf, serviceSigner);
+  await server.start();
 
   // request handler
   const process = async (e: Event, relay: Relay) => {

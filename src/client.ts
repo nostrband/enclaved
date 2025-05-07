@@ -13,6 +13,7 @@ export class Client {
   protected signerPubkey?: string;
 
   protected privkey?: Uint8Array;
+  private done = new Set<string>();
   private pending = new Map<
     string,
     {

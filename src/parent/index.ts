@@ -83,7 +83,7 @@ class ParentServer {
     const conf = JSON.parse(fs.readFileSync("enclaved.conf").toString("utf8"));
     if (!conf) throw new Error("Failed to get conf");
     return JSON.stringify({
-      conf,
+      ...conf,
     });
   }
 

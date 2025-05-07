@@ -18,6 +18,7 @@ export interface Reply {
 
 export class EnclavedServer {
   private signer: Signer;
+  private done = new Set<string>();
 
   constructor(signer: Signer) {
     this.signer = signer;
@@ -83,6 +84,8 @@ export class EnclavedServer {
   // process event tagging pubkey
   public async process(e: Event): Promise<Event | undefined> {
     if (e.kind !== KIND_ENCLAVED) return; // ignore irrelevant kinds
+    if (this.done.has(e.id)) return;
+    this.done.add(e.id);
 
     const res: Reply = {
       id: "",

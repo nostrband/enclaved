@@ -9,6 +9,7 @@ free
 df
 ls -l
 ls -l /
+ls -l /dev/
 
 ./debug-recover.sh
 

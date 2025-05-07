@@ -114,7 +114,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // get ip
-    let ip = std::fs::read_to_string("/app/ip.txt")?.trim().to_owned();
+    let ip = std::fs::read_to_string("/enclaved/ip.txt")?.trim().to_owned();
 
     // get ip socket
     let device = &cli.device;

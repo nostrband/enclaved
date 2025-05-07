@@ -99,9 +99,11 @@ export class ParentClient {
 
     const notDebug = !!attData.pcrs.get(0)!.find((c) => c !== 0);
     if (notDebug) {
+      if (process.env.DEBUG === "true") throw new Error("Non-debug instance with DEBUG=true");
       verifyBuild(attData, build);
       verifyInstance(attData, instance);
     } else {
+      if (process.env.DEBUG !== "true") throw new Error("Debug instance with DEBUG != true");
       if (
         instance.tags.find(
           (t: string[]) => t.length > 1 && t[0] === "PCR4"

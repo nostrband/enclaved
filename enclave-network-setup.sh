@@ -6,26 +6,16 @@ update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 ip=`./node_modules/.bin/tsx src/index.ts cli parent_get_ip | tail -n 1`
 
-# FIXME take IP from parent
-# query ip of instance and store
-#ip=172.31.43.219
+# take IP from parent
 echo "IP $ip"
 
-# required by vsock-to-ip-raw-incoming
-echo $ip > /app/ip.txt
-#/app/vet --url vsock://3:1300/instance/ip > /app/ip.txt
-#cat /app/ip.txt && echo
+# required by vsock utils
+echo $ip > ip.txt
 
-# set up bridge for routing host traffic
-#ip link add name br0 type bridge
-#ip addr add $ip/32 dev br0
-#ip link set dev br0 mtu 9001
-#ip link set dev br0 up
-
-# adding a default route via the bridge
-#ip route add default dev br0 src $ip
-
-# add TUN device for incoming traffic for docker 
+# add TUN device to proxy through vsock,
+# TUN instead of bridge required so that we could
+# pass incoming packets through network stack
+# to make reverse-NAT work
 ip tuntap add dev tun0 mode tun
 ip addr add $ip/32 dev tun0
 ip link set dev tun0 mtu 9001
@@ -98,13 +88,13 @@ ipset add portfilter 1024-61439
 ipset add portfilter 80
 ipset add portfilter 443
 
-# iptables rules to route traffic from host to a nfqueue to be picked up by the proxy
+# iptables rules to route traffic from host to a NFQUEUE to be picked up by the proxy
 iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --match-set internal dst -j NFQUEUE --queue-num 0
 
 # forward traffic from docker containers
 # =======
-# MASQUERADE for outbound NAT from docker subnet to $ip
-# first we set the mark docker docker packets
+# first we set the mark for outgoing packets from docker,
+# FIXME
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j MARK --set-mark 1
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-mark
 iptables -t mangle -A FORWARD -s 172.18.0.0/16 ! -o enclaves -j MARK --set-mark 1
@@ -115,8 +105,8 @@ iptables -t mangle -A FORWARD -s 172.18.0.0/16 ! -o enclaves -j CONNMARK --save-
 # because our vsock proxy overwrites source IP but can't overwrite the source port
 # NOTE: docker deletion will happen after docker is started in enclave.sh
 #iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
-iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -p tcp -j SNAT --to-source $ip:10000-61439
-iptables -t nat -A POSTROUTING -s 172.18.0.0/16 ! -o enclaves -p tcp -j SNAT --to-source $ip:10000-61439
+iptables -t nat -A POSTROUTING -s 172.17.0.0/16 ! -o docker0 -p tcp -j SNAT --to-source $ip:5000-61439
+iptables -t nat -A POSTROUTING -s 172.18.0.0/16 ! -o enclaves -p tcp -j SNAT --to-source $ip:5000-61439
 # since we can't forward to NFQUEUE after POSTROUTING
 # we have to loop these packets back to kernel
 # for second pass of rule matching
@@ -130,6 +120,6 @@ iptables -t mangle -A PREROUTING ! -d $ip -m mark --mark 1 -j NFQUEUE --queue-nu
 
 #iptables -L FORWARD -v -n --line-numbers
 #iptables -L nat -v -n --line-numbers
-iptables -S
+#iptables -S
 
 echo "done enclave-network-setup.sh"

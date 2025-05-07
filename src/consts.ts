@@ -10,3 +10,5 @@ export const KIND_ENCLAVED = 29425;
 export const REPO = "https://github.com/nostrband/enclaved";
 export const ANNOUNCEMENT_INTERVAL = 3600000; // 1h
 
+export const MIN_PORTS_FROM = 5000;
+export const PORTS_PER_CONTAINER = 100;
