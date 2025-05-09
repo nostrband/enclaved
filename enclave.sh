@@ -19,6 +19,7 @@ df
 ls -l
 ls -l /
 ls -l /dev/
+ps axuf
 
 # check PRNG, make sure it uses nsm
 echo "rng_current:"
@@ -33,16 +34,26 @@ fi
 ip addr add 127.0.0.1/8 dev lo
 ip link set lo up
 
-# Run supervisor first, no programs should be running yet
+# set supervisord password to make sure containers
+# can't talk to it FIXME switch to unix socket
+PWD=`head /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 12`
+sed -i "s/{PASSWORD}/${PWD}/g" supervisord.conf
+
+# check
 cat supervisord.conf
+
+# copy data from parent
+./enclave-recover.sh
+
+# Run supervisor first, no programs should be running yet
 ./supervisord -c supervisord.conf &
 SUPERVISOR_PID=$!
 sleep 1
 echo "status"
-./supervisord ctl -c supervisord.conf status
+./supervisord-ctl.sh status
 
 # start proxy to parent
-./supervisord ctl -c supervisord.conf start socat
+./supervisord-ctl.sh start socat-parent
 
 # setup disk
 ./enclave-disk-setup.sh 
@@ -50,19 +61,15 @@ echo "status"
 # setup network (after we started socat and asked parent for our IP)
 ./enclave-network-setup.sh
 
-# required by vsock utils
-mkdir -p /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/
-ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/ld-linux-x86-64.so.2
-
 # start proxies
-./supervisord ctl -c supervisord.conf start ip-to-vsock-raw-outgoing
-./supervisord ctl -c supervisord.conf start vsock-to-ip-raw-incoming
+./supervisord-ctl.sh start ip-to-vsock-raw-outgoing
+./supervisord-ctl.sh start vsock-to-ip-raw-incoming
 
 # start dnsproxy
-./supervisord ctl -c supervisord.conf start dnsproxy
+./supervisord-ctl.sh start dnsproxy
 
 # Start the Docker daemon
-./supervisord ctl -c supervisord.conf start docker
+./supervisord-ctl.sh start docker
 
 # Wait for Docker daemon to be ready
 until docker info >/dev/null 2>&1; do
@@ -70,9 +77,13 @@ until docker info >/dev/null 2>&1; do
     sleep 1
 done
 
-docker network create enclaves -o com.docker.network.bridge.name=enclaves
+# create 'enclaves' network we'll reuse for all containers,
+# it will have 172.18.0.0/16 subnet that we've added some rules for
+# ignore error if network already exists from recovered disk
+docker network create enclaves -o com.docker.network.bridge.name=enclaves || true
 
-# delete default docker rule that we override
+# delete default docker rule that we override, looks
+# like this can't be done before docker is started
 iptables -t nat -D POSTROUTING -s 172.17.0.0/16 ! -o docker0 -j MASQUERADE
 iptables -t nat -D POSTROUTING -s 172.18.0.0/16 ! -o enclaves -j MASQUERADE
 
@@ -85,7 +96,7 @@ iptables-save
 #docker pull quay.io/skopeo/stable:latest #sha256:8bee970d8dbe1260526f18f99709e8323b640c8b7c0cba27da5ccf622cad47cb
 
 # Finally, start the enclaved process
-./supervisord ctl -c supervisord.conf start enclaved
+./supervisord-ctl.sh start enclaved
 
 # tcpdump -i tun0 &
 
@@ -205,6 +216,7 @@ iptables-save
 echo "all started"
 wait $SUPERVISOR_PID
 
+echo "shutdown"
 
-
-
+# copy data to parent
+./enclave-backup.sh

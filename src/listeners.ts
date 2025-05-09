@@ -1,4 +1,4 @@
-import { KIND_ENCLAVED } from "./consts";
+import { KIND_ENCLAVED_RPC } from "./consts";
 import { Event } from "nostr-tools";
 import { Relay } from "./relay";
 import { PubkeyBatcher, now } from "./utils";
@@ -21,7 +21,7 @@ export class RequestListener {
 
   private onEvent(relay: Relay, event: Event) {
     switch (event.kind) {
-      case KIND_ENCLAVED:
+      case KIND_ENCLAVED_RPC:
         const p = event.tags.find((t) => t.length > 1 && t[0] === "p")?.[1];
         if (!p || !this.pubkeys.has(p)) {
           console.log("Unknown pubkey", event);
@@ -40,7 +40,7 @@ export class RequestListener {
       fetch: false,
       filter: {
         "#p": pubkeys,
-        kinds: [KIND_ENCLAVED],
+        kinds: [KIND_ENCLAVED_RPC],
         since: now() - 10,
       },
       onClosed: () => relay.close(id),

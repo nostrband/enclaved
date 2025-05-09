@@ -15,34 +15,63 @@ interface Rep {
 class ParentServer {
   private wss: WebSocketServer;
   private dir: string;
+  private ws?: WebSocket;
 
   constructor({ port, dir = "./instance/" }: { port: number; dir?: string }) {
     this.dir = dir;
     this.wss = new WebSocketServer({ port });
     this.wss.on("connection", this.onConnect.bind(this));
+
+    setInterval(this.checkShutdown.bind(this), 1000);
+  }
+
+  private checkShutdown() {
+    if (!this.ws) return;
+    const file = this.dir + "/shutdown";
+    if (!fs.existsSync(file)) return;
+    fs.rmSync(file);
+    this.ws.send(JSON.stringify({ event: { type: "shutdown" } }));
   }
 
   private read() {
-    const build = JSON.parse(
-      fs.readFileSync(this.dir + "/build.json").toString("utf8")
-    );
-    const instance = JSON.parse(
-      fs.readFileSync(this.dir + "/instance.json").toString("utf8")
-    );
+    let build = undefined;
+    let instance = undefined;
+    try {
+      build = JSON.parse(
+        fs.readFileSync(this.dir + "/build.json").toString("utf8")
+      );
+    } catch (e) {
+      console.log("No build file", e);
+    }
+    try {
+      instance = JSON.parse(
+        fs.readFileSync(this.dir + "/instance.json").toString("utf8")
+      );
+    } catch (e) {
+      console.log("No instance file", e);
+    }
     console.log("build", build);
     console.log("instance", instance);
-    if (!validateEvent(build) || !verifyEvent(build))
-      throw new Error("Invalid build.json");
-    if (!validateEvent(instance) || !verifyEvent(instance))
-      throw new Error("Invalid build.json");
+    if (build) {
+      if (!validateEvent(build) || !verifyEvent(build))
+        throw new Error("Invalid build.json");
+    }
+    if (instance) {
+      if (!validateEvent(instance) || !verifyEvent(instance))
+        throw new Error("Invalid build.json");
+    }
 
     return { build, instance };
   }
 
-  private onConnect(ws: WebSocket) {
+  private onConnect(ws: WebSocket, req: any) {
+    console.log("connect", req.headers);
+    // FIXME check header token
+
+    this.ws = ws;
     ws.on("error", console.error);
-    const self = this;
-    ws.on("message", (data) => self.onMessage(ws, data));
+    ws.on("close", () => (this.ws = undefined));
+    ws.on("message", this.onMessage.bind(this));
   }
 
   private async getMeta(params: string[]) {
@@ -59,8 +88,13 @@ class ParentServer {
       verifyInstance(attData, instance);
     }
 
-    const relays = await fetchOutboxRelays([build.pubkey, instance.pubkey]);
-    console.log("outbox relays", build.pubkey, instance.pubkey, relays);
+    const pubkeys = [];
+    if (build) pubkeys.push(build.pubkey);
+    if (instance) pubkeys.push(instance.pubkey);
+    const relays = pubkeys.length
+      ? await fetchOutboxRelays(pubkeys)
+      : ["wss://relay.damus.io", "wss://relay.primal.net"];
+    console.log("outbox relays", build?.pubkey, instance?.pubkey, relays);
 
     const prod = process.env.PROD === "true";
     return JSON.stringify({
@@ -87,7 +121,7 @@ class ParentServer {
     });
   }
 
-  private async onMessage(ws: WebSocket, data: RawData) {
+  private async onMessage(data: RawData) {
     console.log("received: %s", data);
     let rep: Rep | undefined;
     try {
@@ -115,10 +149,14 @@ class ParentServer {
       if (rep) rep.error = e.message || e.toString();
     }
     console.log("rep", rep);
+
+    // closed by now?
+    if (!this.ws) return;
+
     if (rep) {
-      ws.send(JSON.stringify(rep));
+      this.ws.send(JSON.stringify(rep));
     } else {
-      ws.close();
+      this.ws.close();
     }
   }
 }

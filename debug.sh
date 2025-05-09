@@ -11,8 +11,4 @@ ls -l
 ls -l /
 ls -l /dev/
 
-./debug-recover.sh
-
 DEBUG=true ./enclave.sh
-
-./debug-backup.sh

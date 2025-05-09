@@ -7,7 +7,7 @@ mkdir -p build
 # debug dockerfile with a different entrypoint
 grep -v ENTRYPOINT Dockerfile > Dockerfile-debug
 cat >> Dockerfile-debug <<EOF
-COPY ./debug*.sh .
+COPY ./debug*.sh /enclaved/
 ENTRYPOINT ["/enclaved/debug.sh"]
 EOF
 

@@ -8,6 +8,7 @@ export interface LaunchRequest {
   units?: number;
   env?: any;
   key: Uint8Array;
+  prod: boolean;
 }
 
 async function checkImage(image: string) {
@@ -37,20 +38,32 @@ async function checkImage(image: string) {
   }
 }
 
-async function composeUp(params: {
+async function compose(params: {
   path: string;
-  name: string;
-  up: boolean;
+  name?: string;
+  cmd: "up" | "down" | "stop" | "logs";
   dry: boolean;
 }) {
   const path = params.path + "/compose.yaml";
-  const args = ["compose", "-f", path, "-p", params.name];
-  if (params.up) args.push("up");
-  else args.push("down");
+  const args = ["compose", "-f", path];
+  if (params.name) args.push(...["-p", params.name]);
+  args.push(params.cmd);
   if (params.dry) args.push("--dry-run");
-  args.push("-d");
+  if (params.cmd === "up") args.push("-d");
+  if (params.cmd === "logs") args.push(...["-n", "500"]);
+
   const { code } = await exec("docker", args);
   if (code !== 0) throw new Error("Failed to run docker compose");
+}
+
+export async function stop(dir: string, pubkey: string) {
+  const path = dir + "/metadata/" + pubkey;
+  await compose({ path, cmd: "stop", dry: false });
+}
+
+export async function logs(dir: string, pubkey: string) {
+  const path = dir + "/metadata/" + pubkey;
+  await compose({ path, cmd: "logs", dry: false });
 }
 
 export async function launch(params: LaunchRequest) {
@@ -65,14 +78,17 @@ export async function launch(params: LaunchRequest) {
   const disk = 50 * units;
 
   const envObj = params.env || {};
-  let env = "";
+  let env = `environment:
+      ENCLAVE: ${
+        process.env["DEBUG"] === "true" ? "debug" : params.prod ? "prod" : "dev"
+      }`;
+
   for (const key of Object.keys(envObj)) {
-    if (typeof (envObj[key] !== "string")) throw new Error("Invalid env value");
+    if (typeof envObj[key] !== "string") throw new Error("Invalid env value");
     if (key.includes(" ") || key.includes("\n"))
       throw new Error("Invalid env key");
-    env += `\n      - ${key}: ${envObj[key]}`;
+    env += `\n      ${key}: ${envObj[key]}`;
   }
-  if (env) env = "environment:" + env;
 
   // await this.checkImage(req.params.docker);
 
@@ -81,7 +97,7 @@ export async function launch(params: LaunchRequest) {
   fs.mkdirSync(path, { recursive: true });
   fs.writeFileSync(path + "/key.sk", nip19.nsecEncode(params.key));
 
-  const compose = `
+  const conf = `
 services:
   main:
     image: ${params.docker}
@@ -105,9 +121,11 @@ networks:
     external: true
     name: enclaves
 `;
-  console.log("compose", compose);
+  console.log("compose", conf);
   const composePath = path + "/compose.yaml";
-  fs.writeFileSync(composePath, compose);
+  fs.writeFileSync(composePath, conf);
 
-  await composeUp({ path, name: pubkey, up: true, dry: false });
+  await compose({ path, cmd: "up", name: pubkey, dry: true });
+
+  await compose({ path, cmd: "up", name: pubkey, dry: false });
 }

@@ -6,22 +6,24 @@ import { Relay } from "../relay";
 import { generateSecretKey, getPublicKey, Event } from "nostr-tools";
 import { Signer } from "../types";
 import { PrivateKeySigner } from "../signer";
-import { launch } from "../compose";
 import { DB } from "../db";
-import { bytesToHex } from "@noble/hashes/utils";
 import { MIN_PORTS_FROM, PORTS_PER_CONTAINER } from "../consts";
+import { exec } from "../utils";
+import { Container, ContainerContext } from "./container";
+import { publishNip65Relays } from "../nostr";
 
 // forward NWC calls to wallets
 class Server extends EnclavedServer {
-  private dir: string;
+  private context: ContainerContext;
   private conf: any;
   private db: DB;
+  private conts: Container[] = [];
 
-  constructor(dir: string, conf: any, signer: Signer) {
-    super(signer);
-    this.dir = dir;
+  constructor(context: ContainerContext, conf: any) {
+    super(context.serviceSigner);
     this.conf = conf;
-    this.db = new DB(dir + "/containers.db");
+    this.context = context;
+    this.db = new DB(context.dir + "/containers.db");
   }
 
   public async start() {
@@ -29,6 +31,10 @@ class Server extends EnclavedServer {
       console.log("builtin", this.conf.builtin);
       await this.startBuiltin(this.conf.builtin);
     }
+  }
+
+  public containerCount() {
+    return this.conts.length;
   }
 
   private createContainerFromParams(params: any, isBuiltin: boolean) {
@@ -53,28 +59,33 @@ class Server extends EnclavedServer {
     };
   }
 
-  private async startBuiltin(c: any[]) {
-    for (const params of c) {
+  private async startBuiltin(builtins: any[]) {
+    for (const params of builtins) {
       console.log("launch builtin", params);
       if (!params.name) throw new Error("Name not specified for builtin");
 
-      let c = this.db.getNamedContainer(params.name);
-      if (!c) {
-        c = this.createContainerFromParams(params, true);
-        console.log("new builtin", params.name, c.pubkey, c.portsFrom);
+      let info = this.db.getNamedContainer(params.name);
+      if (!info) {
+        info = this.createContainerFromParams(params, true);
+        console.log("new builtin", params.name, info.pubkey, info.portsFrom);
       } else {
-        console.log("existing builtin", params.name, c.pubkey, c.portsFrom);
+        console.log(
+          "existing builtin",
+          params.name,
+          info.pubkey,
+          info.portsFrom
+        );
       }
 
-      await launch({
-        ...params,
-        dir: this.dir,
-        key: c.seckey,
-      });
+      const cont = new Container(info, this.context);
+
+      await cont.launch();
 
       // mark as deployed
-      c.deployed = true;
-      this.db.upsertContainer(c);
+      cont.setDeployed(true);
+      this.db.upsertContainer(cont.info);
+
+      this.conts.push(cont);
     }
   }
 
@@ -94,6 +105,13 @@ class Server extends EnclavedServer {
     //   pubkey,
     // };
   }
+
+  public async shutdown() {
+    for (const c of this.conts) {
+      console.log("shutdown", c.info.pubkey);
+      await c.stop();
+    }
+  }
 }
 
 export async function startEnclave(opts: {
@@ -102,7 +120,18 @@ export async function startEnclave(opts: {
   dir: string;
 }) {
   console.log("opts", opts);
-  const parent = new ParentClient(opts.parentPort);
+  let server: Server | undefined;
+  let shutdown = false;
+
+  const parent = new ParentClient({
+    port: opts.parentPort,
+    onShutdown: async () => {
+      console.log(new Date(), "shutdown");
+      shutdown = true;
+      await server?.shutdown();
+      exec("./supervisord-ctl.sh", ["shutdown"]);
+    },
+  });
   const conf = await parent.getConf();
   console.log("conf", conf);
 
@@ -117,12 +146,19 @@ export async function startEnclave(opts: {
   const servicePubkey = getPublicKey(servicePrivkey);
   console.log("adminPubkey", servicePubkey);
 
-  const server = new Server(opts.dir, conf, serviceSigner);
+  // was shutdown while we were starting?
+  if (shutdown) return;
+
+  // server
+  server = new Server(
+    { dir: opts.dir, prod: !!prod, serviceSigner, relays: [opts.relayUrl] },
+    conf
+  );
   await server.start();
 
   // request handler
-  const process = async (e: Event, relay: Relay) => {
-    const reply = await server.process(e);
+  const handler = async (e: Event, relay: Relay) => {
+    const reply = await server!.process(e);
     if (!reply) return; // ignored
     try {
       await relay.publish(reply);
@@ -136,7 +172,7 @@ export async function startEnclave(opts: {
   const adminRequestListener = new RequestListener({
     onRequest: async (relay: Relay, pubkey: string, e: Event) => {
       if (pubkey !== servicePubkey) throw new Error("Unknown key");
-      await process(e, relay);
+      await handler(e, relay);
     },
   });
   // add admin to request listener, but not perms listener
@@ -144,16 +180,18 @@ export async function startEnclave(opts: {
 
   const getStats = async () => {
     const stats = new Map<string, string>();
-    // stats.set("pubkeys", ""+keys.size);
+    stats.set("containers", "" + server!.containerCount());
     // stats.set("reqs", ""+reqsTotal);
     return stats;
   };
 
   // announce ourselves
+  publishNip65Relays(serviceSigner, instanceAnnounceRelays);
+
   startAnnouncing({
     build,
     instance,
-    privkey: servicePrivkey,
+    signer: serviceSigner,
     inboxRelayUrl: opts.relayUrl,
     instanceAnnounceRelays,
     prod,

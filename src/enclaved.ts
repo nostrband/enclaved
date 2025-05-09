@@ -1,6 +1,6 @@
 import { Event } from "nostr-tools";
 import { now } from "./utils";
-import { KIND_ENCLAVED } from "./consts";
+import { KIND_ENCLAVED_RPC } from "./consts";
 import { Signer } from "./types";
 
 export interface Request {
@@ -83,7 +83,7 @@ export class EnclavedServer {
 
   // process event tagging pubkey
   public async process(e: Event): Promise<Event | undefined> {
-    if (e.kind !== KIND_ENCLAVED) return; // ignore irrelevant kinds
+    if (e.kind !== KIND_ENCLAVED_RPC) return; // ignore irrelevant kinds
     if (this.done.has(e.id)) return;
     this.done.add(e.id);
 
@@ -120,7 +120,7 @@ export class EnclavedServer {
     console.log(new Date(), "reply", res);
     return this.signer.signEvent({
       pubkey: await this.signer.getPublicKey(),
-      kind: KIND_ENCLAVED,
+      kind: KIND_ENCLAVED_RPC,
       created_at: now(),
       tags: [["p", e.pubkey]],
       content: await this.signer.nip44Encrypt(e.pubkey, JSON.stringify(res)),

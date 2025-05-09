@@ -1,5 +1,5 @@
 # Build layer
-FROM eclipse-temurin:21-jre-jammy AS build
+FROM ubuntu:jammy-20240627.1@sha256:340d9b015b194dc6e2a13938944e0d016e57b9679963fdeb9ce021daac430221 AS build
 
 # Lock environment for reproducibility
 ARG SOURCE_DATE_EPOCH
@@ -13,33 +13,13 @@ COPY ./docker-ubuntu.sh .
 RUN ./docker-ubuntu.sh && rm ./docker-ubuntu.sh
 
 # nodejs package sources
-COPY ./nodesource_setup.sh .
-RUN ./nodesource_setup.sh && rm ./nodesource_setup.sh
+COPY ./docker-node.sh .
+RUN ./docker-node.sh && rm ./docker-node.sh
 
-# install stuff w/ specific versions
-RUN DEBIAN_FRONTEND=noninteractive apt-get update
-RUN DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    bash=5.1-6ubuntu1.1 \
-    wget=1.21.2-2ubuntu1.1 \
-    socat=1.7.4.1-3ubuntu4 \
-    ipset=7.15-1build1 \
-    unzip=6.0-26ubuntu3.2 \
-    iproute2=5.15.0-1ubuntu2 \
-    net-tools=1.60+git20181103.0eebece-1ubuntu5 \
-    iptables=1.8.7-1ubuntu5.2 \
-    "docker-ce=5:28.0.4-1~ubuntu.22.04~jammy" \
-    "docker-ce-cli=5:28.0.4-1~ubuntu.22.04~jammy" \
-    "docker-compose-plugin=2.35.1-1~ubuntu.22.04~jammy" \
-    containerd.io=1.7.27-1 \
-    rclone=1.53.3-4ubuntu1.22.04.3 \
-    xfsprogs=5.13.0-1ubuntu2.1 \
-    nodejs=23.11.0-1nodesource1 
+# main install - docker, socat, ip stuff, node, rclone, xfs, etc
+COPY ./docker-install.sh .
+RUN ./docker-install.sh && rm ./docker-install.sh
 
-    # "conntrack=1:1.4.6-2build2" \
-    # bridge-utils \
-    # iputils-ping \
-
-#RUN apt show docker-compose-plugin
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
 
@@ -58,6 +38,13 @@ RUN tar -xvzf ./supervisord_0.7.3_Linux_64-bit.tar.gz
 RUN mv ./supervisord_0.7.3_Linux_64-bit/supervisord ./supervisord
 RUN rm -Rf ./supervisord_0.7.3_Linux_64-bit ./supervisord_0.7.3_Linux_64-bit.tar.gz
 
+# age
+RUN wget https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+RUN sha256sum age-v1.2.1-linux-amd64.tar.gz | grep 7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50
+RUN tar -xvzf age-v1.2.1-linux-amd64.tar.gz --strip-components=1 age/age
+RUN tar -xvzf age-v1.2.1-linux-amd64.tar.gz --strip-components=1 age/age-keygen
+RUN rm -Rf age-v1.2.1-linux-amd64.tar.gz
+
 # vsock utils for networking
 COPY ./build/vsock/ip-to-vsock-raw-outgoing .
 COPY ./build/vsock/vsock-to-ip-raw-incoming .
@@ -65,13 +52,16 @@ COPY ./build/vsock/vsock-to-ip-raw-incoming .
 # starter
 COPY ./enclave*.sh .
 COPY ./supervisord.conf .
+COPY ./supervisord-ctl.sh .
 
 # test app - remove later
 #COPY ./test-app/build/test.tar .
 #COPY ./test-app/echo-server .
-COPY ./busybox.tar .
-COPY ./compose.yaml .
+#COPY ./busybox.tar .
+#COPY ./compose.yaml .
 #COPY ./nwc-enclaved.tar .
+# FIXME TESTING
+COPY ./age.key .
 
 # enclaved app
 # Copy only package-related files first
@@ -93,8 +83,12 @@ RUN chmod -R go-w *
 RUN rm -Rf /root
 RUN mkdir /root
 
+# required by vsock utils
+RUN mkdir -p /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/
+RUN ln -s /lib64/ld-linux-x86-64.so.2 /nix/store/p9kdj55g5l39nbrxpjyz5wc1m0s7rzsx-glibc-2.40-66/lib/ld-linux-x86-64.so.2
+
 # result layer to reduce image size and remove differing layers
-FROM eclipse-temurin:21-jre-jammy AS server
+FROM ubuntu:jammy-20240627.1@sha256:340d9b015b194dc6e2a13938944e0d016e57b9679963fdeb9ce021daac430221 AS server
 WORKDIR /
 
 # copy everything

@@ -106,7 +106,7 @@ async function ping({
 }
 
 async function parentGetIP({ port }: { port: number }) {
-  const client = new ParentClient(port);
+  const client = new ParentClient({ port });
   const r = await client.getIP();
   console.log(r.ip);
 }

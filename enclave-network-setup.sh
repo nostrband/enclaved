@@ -1,5 +1,7 @@
 #!/bin/sh
 
+set -e
+
 # switch to legacy command syntax
 update-alternatives --set iptables /usr/sbin/iptables-legacy
 update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
@@ -11,6 +13,7 @@ echo "IP $ip"
 
 # required by vsock utils
 echo $ip > ip.txt
+grep $ip ip.txt
 
 # add TUN device to proxy through vsock,
 # TUN instead of bridge required so that we could

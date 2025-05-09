@@ -3,3 +3,4 @@ test-app
 node_modules
 vsock_proxy/target
 *.tar
+*.key

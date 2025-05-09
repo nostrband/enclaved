@@ -1,6 +1,6 @@
 import { bytesToHex } from "@noble/hashes/utils";
 import { generateSecretKey } from "nostr-tools";
-import { KIND_ENCLAVED } from "./consts";
+import { KIND_ENCLAVED_RPC } from "./consts";
 import fs from "node:fs";
 import { Client } from "./client";
 
@@ -19,7 +19,7 @@ export class EnclavedClient extends Client {
     signerPubkey: string;
     privkey?: Uint8Array;
   }) {
-    super({ relayUrl, kind: KIND_ENCLAVED, signerPubkey, privkey });
+    super({ relayUrl, kind: KIND_ENCLAVED_RPC, signerPubkey, privkey });
     this.filename = filename;
   }
 

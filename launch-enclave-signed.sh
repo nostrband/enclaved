@@ -1,3 +1,4 @@
+NAME=enclaved
 DIR=./instance/
 BUILD=./build/
 BUILD_SIG=build.json
@@ -9,6 +10,7 @@ set -e
 
 # ensure
 mkdir -p ${DIR}
+mkdir -p ${DIR}/data
 
 # save for later
 echo ${NPUB} > ${DIR}/npub.txt
@@ -24,5 +26,5 @@ cp ${BUILD}${BUILD_SIG} ${DIR}${BUILD_SIG}
 # cached signature is invalid (was supplied with a wrong EC2 parent 
 # instance id) then enclave will terminate immediately
 # and parent will print an error
-nitro-cli run-enclave --cpu-count 6 --memory 8128 --enclave-cid 16 --eif-path ./build/enclaved.eif
+nitro-cli run-enclave --cpu-count 6 --memory 8128 --enclave-cid 16 --eif-path ./build/${NAME}.eif
 

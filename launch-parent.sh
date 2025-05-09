@@ -53,10 +53,12 @@ echo "status"
 ./build/supervisord ctl -c supervisord-parent.conf start vsock-to-ip-raw-outgoing
 ./build/supervisord ctl -c supervisord-parent.conf start ip-to-vsock-raw-incoming
 
-# start socat
-./build/supervisord ctl -c supervisord-parent.conf start socat
-
 # start parent
+./build/supervisord ctl -c supervisord-parent.conf start socat-parent
 ./build/supervisord ctl -c supervisord-parent.conf start parent
+
+# start rclone
+./build/supervisord ctl -c supervisord-parent.conf start socat-rclone
+./build/supervisord ctl -c supervisord-parent.conf start rclone
 
 wait $SUPERVISOR_PID

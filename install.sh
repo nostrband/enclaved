@@ -2,6 +2,8 @@
 
 # from https://docs.aws.amazon.com/enclaves/latest/user/nitro-enclave-cli-install.html
 
+set -e
+
 sudo dnf install aws-nitro-enclaves-cli -y
 sudo dnf install aws-nitro-enclaves-cli-devel -y
 sudo dnf install socat -y
@@ -35,3 +37,15 @@ sha256sum ./supervisord_0.7.3_Linux_64-bit.tar.gz | grep f0308bab9c781be06ae59c4
 tar -xvzf ./supervisord_0.7.3_Linux_64-bit.tar.gz
 mv ./supervisord_0.7.3_Linux_64-bit/supervisord ./build/supervisord
 rm -Rf ./supervisord_0.7.3_Linux_64-bit ./supervisord_0.7.3_Linux_64-bit.tar.gz
+
+# rclone
+wget https://downloads.rclone.org/v1.69.2/rclone-v1.69.2-linux-amd64.rpm
+sha256sum rclone-v1.69.2-linux-amd64.rpm | grep 13a7921b13e7e34ceef9a0ac51b98769449d3d601dee2eb9a78bd86eb7bab3f4
+dnf install rclone-v1.69.2-linux-amd64.rpm -y 
+
+# age (encryption)
+wget https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+sha256sum age-v1.2.1-linux-amd64.tar.gz | grep 7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50
+tar -xvzf age-v1.2.1-linux-amd64.tar.gz --strip-components=1 age/age
+tar -xvzf age-v1.2.1-linux-amd64.tar.gz --strip-components=1 age/age-keygen
+rm -Rf age-v1.2.1-linux-amd64.tar.gz

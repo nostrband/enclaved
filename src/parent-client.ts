@@ -6,6 +6,7 @@ import { InstanceInfo } from "./types";
 
 export class ParentClient {
   private port: number;
+  private onShutdown?: () => void;
   private ws?: WebSocket;
   private openPromise?: Promise<void>;
   private pending = new Map<
@@ -16,8 +17,9 @@ export class ParentClient {
     }
   >();
 
-  constructor(port: number) {
-    this.port = port;
+  constructor(opts: { port: number, onShutdown?: () => void }) {
+    this.port = opts.port;
+    this.onShutdown = opts.onShutdown;
     this.connect();
   }
 
@@ -37,15 +39,22 @@ export class ParentClient {
   }
 
   private onReplyEvent(e: MessageEvent) {
-    const { id, result, error } = JSON.parse(e.data.toString("utf8"));
-    console.log("reply", { id, result, error });
+    const p = JSON.parse(e.data.toString("utf8"));
+    if (p.event) {
+      if (p.event.type === "shutdown") {
+        this.onShutdown?.();
+      }
+    } else {
+      const { id, result, error } = p;
+      console.log("reply", { id, result, error });
 
-    const cbs = this.pending.get(id);
-    if (!cbs) return;
-    this.pending.delete(id);
+      const cbs = this.pending.get(id);
+      if (!cbs) return;
+      this.pending.delete(id);
 
-    if (error) cbs.err(error);
-    else cbs.ok(result);
+      if (error) cbs.err(error);
+      else cbs.ok(result);
+    }
   }
 
   private async send(method: string, params: string[], timeout = 10000) {
@@ -95,16 +104,19 @@ export class ParentClient {
     const attData = nsmParseAttestation(att);
     const { build, instance, instanceAnnounceRelays, prod } =
       await this.call<InstanceInfo>("get_meta", [att.toString("base64")]);
-    if (!build || !instance) throw new Error("Bad reply");
 
     const notDebug = !!attData.pcrs.get(0)!.find((c) => c !== 0);
     if (notDebug) {
-      if (process.env.DEBUG === "true") throw new Error("Non-debug instance with DEBUG=true");
+      if (!build || !instance) throw new Error("Bad reply");
+      if (process.env.DEBUG === "true")
+        throw new Error("Non-debug instance with DEBUG=true");
       verifyBuild(attData, build);
       verifyInstance(attData, instance);
     } else {
-      if (process.env.DEBUG !== "true") throw new Error("Debug instance with DEBUG != true");
+      if (process.env.DEBUG !== "true")
+        throw new Error("Debug instance with DEBUG != true");
       if (
+        instance &&
         instance.tags.find(
           (t: string[]) => t.length > 1 && t[0] === "PCR4"
         )?.[1] !== bytesToHex(attData.pcrs.get(4)!)
