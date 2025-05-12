@@ -1,4 +1,4 @@
-import { launch, logs, stop } from "../compose";
+import { up, logs, down } from "../docker";
 import { DBContainer } from "../db";
 import { publishContainerInfo } from "../nostr";
 import { PrivateKeySigner } from "../signer";
@@ -14,7 +14,7 @@ export interface ContainerContext {
 export class Container {
   private context: ContainerContext;
   info: DBContainer;
- 
+
   constructor(info: DBContainer, context: ContainerContext) {
     this.info = info;
     this.context = context;
@@ -33,32 +33,24 @@ export class Container {
         serviceSigner: this.context.serviceSigner,
         containerSigner: new PrivateKeySigner(this.info.seckey),
         relays: this.context.relays,
-      });      
+      });
     };
 
     await announce();
-    setInterval(announce, 600000);  
+    setInterval(announce, 600000);
   }
 
-  async launch() {
+  async up() {
     if (!this.info.docker) throw new Error("No docker url");
 
-    await launch({
-      docker: this.info.docker,
-      env: this.info.env,
-      units: this.info.units,
-      dir: this.context.dir,
-      key: this.info.seckey,
-      prod: this.context.prod,
-    });
+    await up(this.info, this.context);
   }
 
-  async stop() {
-    await stop(this.context.dir, this.info.pubkey);
+  async down() {
+    await down(this.info, this.context);
   }
 
   async printLogs() {
-    await logs(this.context.dir, this.info.pubkey);
+    await logs(this.info, this.context);
   }
-
 }

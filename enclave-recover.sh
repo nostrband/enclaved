@@ -23,10 +23,10 @@ url = http://127.0.0.1:3080
 EOF
 
 # stream file from parent and decrypt and put to /run/disk.img
-rclone cat parent:/disk.img.age --config /enclaved/rclone.conf | ./age -d -i age.key -o /run/disk.img 
-
-# info
-ls -l /run/disk.img
+if rclone cat parent:/disk.img.age --config /enclaved/rclone.conf | ./age -d -i age.key -o /run/disk.img ; then
+  # info
+  ls -l /run/disk.img
+fi
 
 # shutdown
 ./supervisord-ctl.sh shutdown

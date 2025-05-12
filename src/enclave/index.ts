@@ -6,7 +6,7 @@ import { Relay } from "../relay";
 import { generateSecretKey, getPublicKey, Event } from "nostr-tools";
 import { Signer } from "../types";
 import { PrivateKeySigner } from "../signer";
-import { DB } from "../db";
+import { DB, DBContainer } from "../db";
 import { MIN_PORTS_FROM, PORTS_PER_CONTAINER } from "../consts";
 import { exec } from "../utils";
 import { Container, ContainerContext } from "./container";
@@ -37,7 +37,7 @@ class Server extends EnclavedServer {
     return this.conts.length;
   }
 
-  private createContainerFromParams(params: any, isBuiltin: boolean) {
+  private createContainerFromParams(params: any, isBuiltin: boolean): DBContainer {
     const key = generateSecretKey();
     const maxPortsFrom = this.db.getMaxPortsFrom();
     const portsFrom = maxPortsFrom
@@ -54,7 +54,7 @@ class Server extends EnclavedServer {
       units: params.units || 1,
       adminPubkey: "",
       docker: params.docker,
-      env: params.env ? JSON.stringify(params.env) : undefined,
+      env: params.env,
       name: params.name,
     };
   }
@@ -75,11 +75,14 @@ class Server extends EnclavedServer {
           info.pubkey,
           info.portsFrom
         );
+        // might have changed
+        info.docker = params.docker;
+        info.env = params.env;
+        info.units = params.units;
       }
 
       const cont = new Container(info, this.context);
-
-      await cont.launch();
+      await cont.up();
 
       // mark as deployed
       cont.setDeployed(true);
@@ -109,7 +112,7 @@ class Server extends EnclavedServer {
   public async shutdown() {
     for (const c of this.conts) {
       console.log("shutdown", c.info.pubkey);
-      await c.stop();
+      await c.down();
     }
   }
 }

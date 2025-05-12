@@ -258,6 +258,7 @@ export async function publishContainerInfo(params: {
   );
 
   // const npub = nip19.npubEncode(pubkey);
+  const docker = params.info.docker ? `Docker: ${params.info.docker}` : "";
   const profile: UnsignedEvent = {
     pubkey,
     kind: KIND_PROFILE,
@@ -267,6 +268,7 @@ export async function publishContainerInfo(params: {
       //      lud16: `${npub}@${npub}.zap.land`,
       about: `
 This is a container running inside enclaved server.\n
+${docker}\n
 Learn more at ${REPO}\n`,
       picture: "",
     }),
