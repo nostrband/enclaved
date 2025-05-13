@@ -84,11 +84,11 @@ export function normalizeRelay(r: string) {
   } catch {}
 }
 
-export function getIP() {
+export function getIP(prefix: string = "ens") {
   const nets: any = networkInterfaces();
   // console.log("nets", nets);
   for (const name of Object.keys(nets)) {
-    if (!name.startsWith("ens")) continue;
+    if (!name.startsWith(prefix)) continue;
     for (const net of nets[name]) {
       // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
       // 'IPv4' is in Node <= 17, from 18 it's a number 4 or 6

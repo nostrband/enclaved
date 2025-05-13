@@ -1,14 +1,16 @@
 import { up, logs, down } from "../docker";
 import { DBContainer } from "../db";
-import { publishContainerInfo } from "../nostr";
+import { prepareRootCertificate, publishContainerInfo } from "../nostr";
 import { PrivateKeySigner } from "../signer";
 import { Signer } from "../types";
+import { nsmGetAttestationInfo } from "../nsm";
 
 export interface ContainerContext {
   dir: string;
   prod: boolean;
   serviceSigner: Signer;
   relays: string[];
+  contEndpoint: string;
 }
 
 export class Container {
@@ -18,7 +20,6 @@ export class Container {
   constructor(info: DBContainer, context: ContainerContext) {
     this.info = info;
     this.context = context;
-    if (this.info.deployed) this.startAnnouncing();
   }
 
   setDeployed(d: boolean) {
@@ -28,10 +29,18 @@ export class Container {
 
   private async startAnnouncing() {
     const announce = async () => {
+      const info = nsmGetAttestationInfo(
+        await this.context.serviceSigner.getPublicKey(),
+        this.context.prod
+      );
+      const root = await prepareRootCertificate(
+        info,
+        this.context.serviceSigner
+      );
       await publishContainerInfo({
         info: this.info,
+        root,
         serviceSigner: this.context.serviceSigner,
-        containerSigner: new PrivateKeySigner(this.info.seckey),
         relays: this.context.relays,
       });
     };
@@ -44,13 +53,15 @@ export class Container {
     if (!this.info.docker) throw new Error("No docker url");
 
     await up(this.info, this.context);
+
+    if (this.info.deployed) this.startAnnouncing();
   }
 
   async down() {
     await down(this.info, this.context);
   }
 
-  async printLogs() {
-    await logs(this.info, this.context);
+  async printLogs(follow?: boolean) {
+    await logs(this.info, this.context, follow);
   }
 }

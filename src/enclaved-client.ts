@@ -64,7 +64,7 @@ export class EnclavedClient extends Client {
   }
   async nip04Decrypt(pubkey: string, data: string): Promise<string> {
     return await this.send({
-      method: "nip04_decrypt",
+      method: "nip44_decrypt",
       params: [pubkey, data],
     });
   }

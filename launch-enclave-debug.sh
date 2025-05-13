@@ -21,6 +21,8 @@ mkdir -p ${DIR}/data
 # ensure instance signature
 #tsx src/index.ts cli ensure_instance_signature ${DIR}
 
+#FIXME take memory and cpu-count from /etc/nitro_enclaves/allocator.yaml
+
 # launch the instance, which will ask the parent process
 # for the instance signature ensured above, if 
 # cached signature is invalid (was supplied with a wrong EC2 parent 

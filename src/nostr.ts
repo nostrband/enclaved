@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import { Event, UnsignedEvent, nip19 } from "nostr-tools";
-import { Signer } from "./types";
+import { AttestationInfo, Signer } from "./types";
 import {
-  KIND_ENCLAVED_ATTESTATION,
-  KIND_ENCLAVED_CONTAINER,
+  CERT_TTL,
+  KIND_ENCLAVED_CERTIFICATE,
+  KIND_ENCLAVED_PROCESS,
   KIND_INSTANCE,
   KIND_PROFILE,
   KIND_RELAYS,
+  KIND_ROOT_CERTIFICATE,
   REPO,
 } from "./consts";
 import { now } from "./utils";
@@ -14,6 +16,7 @@ import { Relay } from "./relay";
 import { AnnounceParams } from "./announce";
 import { bytesToHex } from "@noble/hashes/utils";
 import { DBContainer } from "./db";
+import { PrivateKeySigner } from "./signer";
 
 const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
@@ -62,11 +65,29 @@ export async function publishNip65Relays(signer: Signer, relays?: string[]) {
   console.log("published outbox relays", event, OUTBOX_RELAYS);
 }
 
+export async function prepareRootCertificate(
+  info: AttestationInfo,
+  signer: Signer
+) {
+  const servicePubkey = await signer.getPublicKey();
+  const tmpl: UnsignedEvent = {
+    pubkey: servicePubkey,
+    kind: KIND_ROOT_CERTIFICATE,
+    created_at: now(),
+    content: info.base64,
+    tags: [
+      ["t", info.env],
+      ["expiration", "" + (now() + CERT_TTL)],
+      ["alt", "attestation certificate by AWS Nitro Enclave"],
+    ],
+  };
+  return await signer.signEvent(tmpl);
+}
+
 export async function publishInstance(
   p: AnnounceParams,
-  attestation: string,
-  env: string,
-  pcrs?: Map<number, Uint8Array>
+  info: AttestationInfo,
+  root: Event
 ) {
   const {
     signer,
@@ -87,27 +108,28 @@ export async function publishInstance(
     pubkey,
     kind: KIND_INSTANCE,
     created_at: now(),
-    content: attestation,
+    content: "",
     tags: [
       ["r", REPO],
       ["name", pkg.name],
       ["v", pkg.version],
-      ["t", env],
+      ["t", info.env],
       // admin interface relay with spam protection
       ["relay", inboxRelayUrl],
       // expires in 3 hours, together with attestation doc
-      ["expiration", "" + (now() + 3 * 3600)],
-      ["alt", "enclaved instance"],
+      ["expiration", "" + (now() + CERT_TTL)],
+      ["alt", "enclaved server"],
       ["o", open ? "true" : "false"],
       ["comment", open ? "Open for new containers" : "Closed"],
+      ["tee_root", JSON.stringify(root)],
     ],
   };
-  if (pcrs) {
+  if (info.info?.pcrs) {
     ins.tags.push(
       // we don't use PCR3
       ...[0, 1, 2, 4, 8].map((id) => [
         "x",
-        bytesToHex(pcrs!.get(id)!),
+        bytesToHex(info.info?.pcrs!.get(id)!),
         `PCR${id}`,
       ])
     );
@@ -202,41 +224,54 @@ export async function publishStats(
   await signPublish(event, signer, relays);
 }
 
-export async function publishContainerInfo(params: {
+export async function prepareContainerCert(params: {
   info: DBContainer;
   serviceSigner: Signer;
-  containerSigner: Signer;
+}) {
+  const servicePubkey = await params.serviceSigner.getPublicKey();
+  const tmpl: UnsignedEvent = {
+    pubkey: servicePubkey,
+    kind: KIND_ENCLAVED_CERTIFICATE,
+    created_at: now(),
+    content: "",
+    tags: [
+      ["p", params.info.pubkey, "container"],
+      ["expiration", "" + (now() + CERT_TTL)],
+      ["alt", "enclaved container certificate"],
+    ],
+  };
+  if (params.info.docker)
+    tmpl.tags.push(["r", `docker://${params.info.docker}`]);
+  return await params.serviceSigner.signEvent(tmpl);
+}
+
+export async function publishContainerInfo(params: {
+  info: DBContainer;
+  root: Event;
+  serviceSigner: Signer;
   relays: string[];
   // stats: any;
 }) {
-  const pubkey = await params.containerSigner.getPublicKey();
-  const servicePubkey = await params.serviceSigner.getPublicKey();
-  const containerAttestation = await params.serviceSigner.signEvent({
-    pubkey: servicePubkey,
-    kind: KIND_ENCLAVED_ATTESTATION,
-    created_at: now(),
-    content: "",
-    tags: [["p", pubkey, "container"]],
+  const containerSigner = new PrivateKeySigner(params.info.seckey);
+
+  const pubkey = await containerSigner.getPublicKey();
+
+  const cert = await prepareContainerCert({
+    info: params.info,
+    serviceSigner: params.serviceSigner,
   });
 
+  const servicePubkey = await params.serviceSigner.getPublicKey();
   const containerInfo: UnsignedEvent = {
     pubkey,
-    kind: KIND_ENCLAVED_CONTAINER,
+    kind: KIND_ENCLAVED_PROCESS,
     created_at: now(),
     content: "",
     tags: [
       ["p", servicePubkey, "enclaved"],
-      [
-        "attestation",
-        JSON.stringify({
-          id: containerAttestation.id,
-          kind: containerAttestation.kind,
-          created_at: containerAttestation.created_at,
-          pubkey: containerAttestation.pubkey,
-          content: containerAttestation.content,
-          tags: containerAttestation.tags,
-        }),
-      ],
+      ["tee_root", JSON.stringify(params.root)],
+      ["tee_cert", JSON.stringify(cert)],
+      ["alt", "enclaved container"],
       // ["someInfo", "" + info.someInfo],
     ],
   };
@@ -245,11 +280,10 @@ export async function publishContainerInfo(params: {
   if (params.info.docker)
     containerInfo.tags.push(["r", params.info.docker, "docker"]);
 
-  const containerEvent = await signPublish(
-    containerInfo,
-    params.containerSigner,
-    [...params.relays, ...DEFAULT_RELAYS]
-  );
+  const containerEvent = await signPublish(containerInfo, containerSigner, [
+    ...params.relays,
+    ...DEFAULT_RELAYS,
+  ]);
   console.log(
     "published container info",
     containerEvent,
@@ -277,7 +311,7 @@ Learn more at ${REPO}\n`,
 
   const profileEvent = await signPublish(
     profile,
-    params.containerSigner,
+    containerSigner,
     OUTBOX_RELAYS
   );
   console.log("published profile", profileEvent, OUTBOX_RELAYS);
@@ -297,4 +331,23 @@ Learn more at ${REPO}\n`,
   //   const statsEvent = await signer.signEvent(stats);
   //   await publish(statsEvent, DEFAULT_RELAYS);
   //   console.log("published stats", statsEvent, DEFAULT_RELAYS);
+}
+
+export async function prepareAppCert(params: {
+  info: DBContainer;
+  appPubkey: string;
+}) {
+  const containerSigner = new PrivateKeySigner(params.info.seckey);
+  const tmpl: UnsignedEvent = {
+    pubkey: params.info.pubkey,
+    kind: KIND_ENCLAVED_CERTIFICATE,
+    created_at: now(),
+    content: "",
+    tags: [
+      ["p", params.appPubkey, "app"],
+      ["expiration", "" + (now() + CERT_TTL)],
+      ["alt", "enclaved app certificate"],
+    ],
+  };
+  return await containerSigner.signEvent(tmpl);
 }

@@ -6,6 +6,7 @@ export interface DBContainer {
   id: number;
   pubkey: string;
   seckey: Uint8Array;
+  token: string;
   adminPubkey?: string;
   portsFrom: number;
   name: string;
@@ -27,6 +28,7 @@ export class DB {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         pubkey TEXT,
         seckey TEXT,
+        token TEXT,
         admin_pubkey TEXT DEFAULT '',
         ports_from INTEGER,
         name,
@@ -65,6 +67,7 @@ export class DB {
       paidUntil: (rec.paid_until as number) || 0,
       portsFrom: rec.ports_from as number,
       pubkey: rec.pubkey as string,
+      token: rec.token as string,
       seckey: hexToBytes(rec.seckey as string),
       units: rec.units as number,
       docker: rec.docker as string,
@@ -87,6 +90,7 @@ export class DB {
       INSERT INTO containers (
         pubkey,
         seckey,
+        token,
         admin_pubkey,
         ports_from,
         name,
@@ -95,7 +99,7 @@ export class DB {
         is_builtin,
         env,
         deployed
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE
       SET
         ports_from = ?,
@@ -108,6 +112,7 @@ export class DB {
     const f = upsert.run(
       c.pubkey,
       bytesToHex(c.seckey),
+      c.token,
       c.adminPubkey || "",
       c.portsFrom,
       c.name,
@@ -131,6 +136,12 @@ export class DB {
     `);
     const rec = select.get();
     return (rec?.ports_from as number) || 0;
+  }
+
+  public listContainers() {
+    const select = this.db.prepare(`SELECT * FROM containers`);
+    const recs = select.all();
+    return recs.map(r => this.recToContainer(r));
   }
 
   // public addMiningFeePaid(fee: number) {

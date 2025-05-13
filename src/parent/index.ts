@@ -1,26 +1,20 @@
-import { RawData, WebSocket, WebSocketServer } from "ws";
+import { WebSocket } from "ws";
 import fs from "node:fs";
 import { validateEvent, verifyEvent } from "nostr-tools";
 import { nsmParseAttestation } from "../nsm";
 import { verifyBuild, verifyInstance } from "../aws";
 import { fetchOutboxRelays } from "../cli/utils";
 import { getIP } from "../utils";
+import { WSServer, Rep, Req } from "../ws-server";
 
-interface Rep {
-  id: string;
-  result: string;
-  error?: string;
-}
-
-class ParentServer {
-  private wss: WebSocketServer;
+// FIXME
+class ParentServer extends WSServer {
   private dir: string;
   private ws?: WebSocket;
 
   constructor({ port, dir = "./instance/" }: { port: number; dir?: string }) {
+    super(port);
     this.dir = dir;
-    this.wss = new WebSocketServer({ port });
-    this.wss.on("connection", this.onConnect.bind(this));
 
     setInterval(this.checkShutdown.bind(this), 1000);
   }
@@ -64,14 +58,9 @@ class ParentServer {
     return { build, instance };
   }
 
-  private onConnect(ws: WebSocket, req: any) {
-    console.log("connect", req.headers);
-    // FIXME check header token
-
+  protected onConnected(ws: WebSocket) {
     this.ws = ws;
-    ws.on("error", console.error);
     ws.on("close", () => (this.ws = undefined));
-    ws.on("message", this.onMessage.bind(this));
   }
 
   private async getMeta(params: string[]) {
@@ -97,40 +86,32 @@ class ParentServer {
     console.log("outbox relays", build?.pubkey, instance?.pubkey, relays);
 
     const prod = process.env.PROD === "true";
-    return JSON.stringify({
+    return {
       build: build,
       instance: instance,
       instanceAnnounceRelays: relays,
       prod,
-    });
+    };
   }
 
   private async getIP() {
     const ip = getIP();
     if (!ip) throw new Error("Failed to get IP");
-    return JSON.stringify({
+    return {
       ip,
-    });
+    };
   }
 
   private async getConf() {
     const conf = JSON.parse(fs.readFileSync("enclaved.conf").toString("utf8"));
     if (!conf) throw new Error("Failed to get conf");
-    return JSON.stringify({
+    return {
       ...conf,
-    });
+    };
   }
 
-  private async onMessage(data: RawData) {
-    console.log("received: %s", data);
-    let rep: Rep | undefined;
+  protected async handle(req: Req, rep: Rep) {
     try {
-      const req = JSON.parse(data.toString("utf8"));
-      console.log("req", req);
-      rep = {
-        id: req.id,
-        result: "",
-      };
       switch (req.method) {
         case "get_ip":
           rep.result = await this.getIP();
@@ -145,19 +126,10 @@ class ParentServer {
           throw new Error("Unknown method");
       }
     } catch (e: any) {
-      console.log("Bad req", e, data.toString("utf8"));
+      console.log("Bad req", e, req);
       if (rep) rep.error = e.message || e.toString();
     }
     console.log("rep", rep);
-
-    // closed by now?
-    if (!this.ws) return;
-
-    if (rep) {
-      this.ws.send(JSON.stringify(rep));
-    } else {
-      this.ws.close();
-    }
   }
 }
 

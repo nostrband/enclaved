@@ -4,13 +4,39 @@ import { RequestListener } from "../listeners";
 import { ParentClient } from "../parent-client";
 import { Relay } from "../relay";
 import { generateSecretKey, getPublicKey, Event } from "nostr-tools";
-import { Signer } from "../types";
 import { PrivateKeySigner } from "../signer";
 import { DB, DBContainer } from "../db";
 import { MIN_PORTS_FROM, PORTS_PER_CONTAINER } from "../consts";
-import { exec } from "../utils";
+import { exec, getIP } from "../utils";
 import { Container, ContainerContext } from "./container";
-import { publishNip65Relays } from "../nostr";
+import {
+  prepareAppCert,
+  prepareContainerCert,
+  prepareRootCertificate,
+  publishNip65Relays,
+} from "../nostr";
+import fs from "node:fs";
+import { bytesToHex, randomBytes } from "@noble/hashes/utils";
+import { WSServer, Rep, Req } from "../ws-server";
+import { nsmGetAttestationInfo } from "../nsm";
+import { IncomingHttpHeaders } from "http";
+import { WebSocket } from "ws";
+
+export function getSecretKey(dir: string) {
+  const FILE = dir + "/.service.sk";
+  if (fs.existsSync(FILE)) {
+    const hex = fs.readFileSync(FILE).toString("utf8");
+    const privkey = Buffer.from(hex, "hex");
+    if (privkey.length !== 32) throw new Error("Invalid privkey");
+    console.log("existing service key");
+    return privkey;
+  }
+
+  console.log("new service key");
+  const privkey = generateSecretKey();
+  fs.writeFileSync(FILE, bytesToHex(privkey));
+  return privkey;
+}
 
 // forward NWC calls to wallets
 class Server extends EnclavedServer {
@@ -24,6 +50,29 @@ class Server extends EnclavedServer {
     this.conf = conf;
     this.context = context;
     this.db = new DB(context.dir + "/containers.db");
+    console.log("existing containers:");
+    this.db
+      .listContainers()
+      .map((c) =>
+        console.log(
+          "p",
+          c.pubkey,
+          "name",
+          c.name,
+          "builtin",
+          c.isBuiltin,
+          "docker",
+          c.docker
+        )
+      );
+  }
+
+  public getContext(): ContainerContext {
+    return this.context;
+  }
+
+  public getContainers(): Container[] {
+    return this.conts;
   }
 
   public async start() {
@@ -37,7 +86,10 @@ class Server extends EnclavedServer {
     return this.conts.length;
   }
 
-  private createContainerFromParams(params: any, isBuiltin: boolean): DBContainer {
+  private createContainerFromParams(
+    params: any,
+    isBuiltin: boolean
+  ): DBContainer {
     const key = generateSecretKey();
     const maxPortsFrom = this.db.getMaxPortsFrom();
     const portsFrom = maxPortsFrom
@@ -51,6 +103,7 @@ class Server extends EnclavedServer {
       portsFrom,
       pubkey: getPublicKey(key),
       seckey: key,
+      token: bytesToHex(randomBytes(16)),
       units: params.units || 1,
       adminPubkey: "",
       docker: params.docker,
@@ -89,6 +142,9 @@ class Server extends EnclavedServer {
       this.db.upsertContainer(cont.info);
 
       this.conts.push(cont);
+
+      // start printing it's logs
+      cont.printLogs(true);
     }
   }
 
@@ -113,6 +169,64 @@ class Server extends EnclavedServer {
     for (const c of this.conts) {
       console.log("shutdown", c.info.pubkey);
       await c.down();
+    }
+  }
+}
+
+class ContainerServer extends WSServer {
+  private server: Server;
+
+  constructor(port: number, server: Server) {
+    super(port);
+    this.server = server;
+  }
+
+  private getContainer(headers?: IncomingHttpHeaders) {
+    const token = headers?.["token"];
+    return this.server.getContainers().find((c) => c.info.token === token);
+  }
+
+  protected checkHeaders(ws: WebSocket, headers: IncomingHttpHeaders) {
+    return !!this.getContainer(headers);
+  }
+
+  private async createCertificate(
+    req: Req,
+    rep: Rep,
+    headers?: IncomingHttpHeaders
+  ) {
+    if (!req.params.pubkey) throw new Error("No pubkey for certificate");
+    const pubkey = req.params.pubkey;
+
+    const info = nsmGetAttestationInfo(
+      await this.server.getContext().serviceSigner.getPublicKey(),
+      this.server.getContext().prod
+    );
+    const root = await prepareRootCertificate(
+      info,
+      this.server.getContext().serviceSigner
+    );
+
+    const cont = this.getContainer(headers);
+    const contCert = await prepareContainerCert({
+      info: cont!.info,
+      serviceSigner: this.server.getContext().serviceSigner,
+    });
+
+    const appCert = await prepareAppCert({
+      info: cont!.info,
+      appPubkey: pubkey,
+    });
+
+    rep.result = {
+      root,
+      certs: [contCert, appCert],
+    };
+  }
+
+  protected async handle(req: Req, rep: Rep, headers?: IncomingHttpHeaders) {
+    if (req.method === "create_certificate") {
+      await this.createCertificate(req, rep, headers);
     }
   }
 }
@@ -144,7 +258,7 @@ export async function startEnclave(opts: {
   console.log(new Date(), "enclaved opts", opts);
 
   // new admin key on every restart
-  const servicePrivkey = generateSecretKey();
+  const servicePrivkey = getSecretKey(opts.dir);
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
   const servicePubkey = getPublicKey(servicePrivkey);
   console.log("adminPubkey", servicePubkey);
@@ -153,11 +267,23 @@ export async function startEnclave(opts: {
   if (shutdown) return;
 
   // server
+  const contPort = opts.parentPort + 1;
+  const ip = getIP("tun0");
+
   server = new Server(
-    { dir: opts.dir, prod: !!prod, serviceSigner, relays: [opts.relayUrl] },
+    {
+      dir: opts.dir,
+      prod: !!prod,
+      serviceSigner,
+      contEndpoint: `ws://${ip}:${contPort}`,
+      relays: [opts.relayUrl],
+    },
     conf
   );
   await server.start();
+
+  // handle requests from containers
+  new ContainerServer(contPort, server);
 
   // request handler
   const handler = async (e: Event, relay: Relay) => {
@@ -208,7 +334,7 @@ export function mainEnclave(argv: string[]) {
   switch (argv[0]) {
     case "run":
       const parentPort = Number(argv?.[1]) || 2080;
-      const relayUrl = argv?.[2] || "wss://relay.primal.net";
+      const relayUrl = argv?.[2] || "wss://relay.damus.io";
       const dir = argv?.[3] || "/enclaved_data";
       startEnclave({ parentPort, relayUrl, dir });
       break;

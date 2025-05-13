@@ -35,6 +35,10 @@ df
 mkdir -p /mnt/xfs/docker
 ln -s /mnt/xfs/docker /var/lib/docker
 
+# docker volumes
+mkdir -p /mnt/xfs/volumes
+find /mnt/xfs/volumes
+
 # make sure our process uses this disk too
 mkdir -p /mnt/xfs/data
 ln -s /mnt/xfs/data /enclaved_data

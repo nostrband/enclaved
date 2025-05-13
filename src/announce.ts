@@ -1,10 +1,11 @@
 import { Event, UnsignedEvent, nip19 } from "nostr-tools";
-import { nsmGetAttestation, nsmParseAttestation } from "./nsm";
+import { nsmGetAttestation, nsmGetAttestationInfo, nsmParseAttestation } from "./nsm";
 import { ANNOUNCEMENT_INTERVAL, KIND_INSTANCE, REPO } from "./consts";
 import { now } from "./utils";
 import { Signer } from "./types";
 import {
   OUTBOX_RELAYS,
+  prepareRootCertificate,
   publishInstance,
   publishInstanceProfile,
   publishStats,
@@ -24,30 +25,18 @@ export interface AnnounceParams {
 
 async function announce(p: AnnounceParams) {
   const pubkey = await p.signer.getPublicKey();
-  const attestation = nsmGetAttestation(pubkey);
+
+  const attestation = nsmGetAttestationInfo(pubkey, p.prod);
   console.log("attestation", attestation);
 
-  let attestationString = "";
-  let env = "debug";
-  let pcrs: Map<number, Uint8Array> | undefined = undefined;
-  if (attestation) {
-    attestationString = attestation.toString("base64");
-    const info = nsmParseAttestation(attestation);
-    pcrs = info.pcrs;
-
-    // PCR0=all_zeroes means we're in debug mode
-    env = !pcrs.get(0)!.find((v) => v !== 0)
-      ? "debug"
-      : p.prod
-      ? "prod"
-      : "dev";
-  }
+  // root cert / aws attestation event
+  const root = await prepareRootCertificate(attestation, p.signer);
 
   // kind 63793
-  await publishInstance(p, attestationString, env, pcrs);
+  await publishInstance(p, attestation, root);
 
   // kind 0
-  await publishInstanceProfile(p.signer, env, p.instanceAnnounceRelays);
+  await publishInstanceProfile(p.signer, attestation.env, p.instanceAnnounceRelays);
 
   // kind 1
   if (p.getStats)

@@ -26,6 +26,12 @@ export interface AttestationData {
   module_id: string;
 }
 
+export interface AttestationInfo {
+  info: AttestationData | undefined;
+  base64: string;
+  env: "debug" | "dev" | "prod";
+}
+
 export interface InstanceInfo {
   build?: Event;
   instance?: Event;
