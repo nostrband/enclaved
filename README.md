@@ -68,6 +68,8 @@ It's ok when you control your own client and can update them both, but it's not 
 
 That's where Nostr and our custom key storage are gonna help. The plan is to have app maintainers publish `releases` with expected code hashes on Nostr, and let key storage apply policies like *only release keys to the updated enclave if new hashes are properly signed by maintainers*, etc. 
 
+Clients could then discover the updated PCR values and check on Nostr if this is an upgrade signed by maintainers and thus accept the new code hashes.
+
 The details TBD, if you want to help build this out - send your ideas.
 
 ## Exposing open ports
