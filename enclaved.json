@@ -1,0 +1,14 @@
+{
+  "builtin": [
+    {
+      "name": "nwc-enclaved",
+      "docker": "nostrband/nwc-enclaved@sha256:6c3e573e074d94a76e99d49c2043bc71f3866f90616b26a095efbd42109c3187",
+      "units": 20,
+      "env": {
+        "NWC_RELAYS": "wss://relay.zap.land",
+        "MAX_BALANCE": "1000000",
+        "ENCLAVED_INTERNAL_WALLET": "true"
+      }
+    }
+  ]
+}

@@ -12,16 +12,17 @@ RUN echo "Timestamp" ${SOURCE_DATE_EPOCH}
 COPY ./docker-ubuntu.sh .
 RUN ./docker-ubuntu.sh && rm ./docker-ubuntu.sh
 
-# nodejs package sources
-COPY ./docker-node.sh .
-RUN ./docker-node.sh && rm ./docker-node.sh
-
 # main install - docker, socat, ip stuff, node, rclone, xfs, etc
 COPY ./docker-install.sh .
 RUN ./docker-install.sh && rm ./docker-install.sh
 
 RUN apt clean 
 RUN rm -Rf /var/lib/apt/lists/* /var/log/* /tmp/* /var/tmp/* /var/cache/ldconfig/aux-cache
+
+# nodejs
+RUN wget https://nodejs.org/dist/v24.0.1/node-v24.0.1-linux-x64.tar.xz
+RUN sha256sum node-v24.0.1-linux-x64.tar.xz | grep 12d8b7c7dd9191bd4f3afe872c7d4908ac75d2a6ef06d2ae59c0b4aa384bc875
+RUN tar -xJf node-v24.0.1-linux-x64.tar.xz -C /usr/local --strip-components=1 && rm node-v24.0.1-linux-x64.tar.xz
 
 # dnsproxy
 RUN wget https://github.com/AdguardTeam/dnsproxy/releases/download/v0.75.2/dnsproxy-linux-amd64-v0.75.2.tar.gz
@@ -48,6 +49,9 @@ RUN rm -Rf age-v1.2.1-linux-amd64.tar.gz
 # vsock utils for networking
 COPY ./build/vsock/ip-to-vsock-raw-outgoing .
 COPY ./build/vsock/vsock-to-ip-raw-incoming .
+
+# conf
+COPY ./enclaved.json .
 
 # starter
 COPY ./enclave*.sh .

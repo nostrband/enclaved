@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { getPublicKey, nip19 } from "nostr-tools";
 import { exec } from "./utils";
 import { DBContainer } from "./db";
-import { ContainerContext } from "./enclave/container";
+import { ContainerContext } from "../enclave/container";
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
 

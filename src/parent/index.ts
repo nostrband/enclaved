@@ -1,11 +1,11 @@
 import { WebSocket } from "ws";
 import fs from "node:fs";
 import { validateEvent, verifyEvent } from "nostr-tools";
-import { nsmParseAttestation } from "../nsm";
-import { verifyBuild, verifyInstance } from "../aws";
+import { nsmParseAttestation } from "../modules/nsm";
+import { verifyBuild, verifyInstance } from "../modules/aws";
 import { fetchOutboxRelays } from "../cli/utils";
-import { getIP } from "../utils";
-import { WSServer, Rep, Req } from "../ws-server";
+import { getIP } from "../modules/utils";
+import { WSServer, Rep, Req } from "../modules/ws-server";
 
 // FIXME
 class ParentServer extends WSServer {
@@ -102,22 +102,11 @@ class ParentServer extends WSServer {
     };
   }
 
-  private async getConf() {
-    const conf = JSON.parse(fs.readFileSync("enclaved.conf").toString("utf8"));
-    if (!conf) throw new Error("Failed to get conf");
-    return {
-      ...conf,
-    };
-  }
-
   protected async handle(req: Req, rep: Rep) {
     try {
       switch (req.method) {
         case "get_ip":
           rep.result = await this.getIP();
-          break;
-        case "get_conf":
-          rep.result = await this.getConf();
           break;
         case "get_meta":
           rep.result = await this.getMeta(req.params);

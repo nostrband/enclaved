@@ -1,6 +1,5 @@
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { DatabaseSync } from "node:sqlite";
-import { MIN_PORTS_FROM } from "./consts";
 
 export interface DBContainer {
   id: number;
@@ -16,6 +15,7 @@ export interface DBContainer {
   isBuiltin: boolean;
   env?: any;
   deployed: boolean;
+  paymentHash?: string;
 }
 
 export class DB {
@@ -37,7 +37,8 @@ export class DB {
         paid_until INTEGER DEFAULT 0,
         is_builtin INTEGER DEFAULT 0,
         env TEXT DEFAULT '',
-        deployed INTEGER DEFAULT 0
+        deployed INTEGER DEFAULT 0,
+        payment_hash TEXT DEFAULT ''
       )
     `);
     this.db.exec(`
@@ -73,6 +74,7 @@ export class DB {
       docker: rec.docker as string,
       env: rec.env ? JSON.parse(rec.env) : undefined,
       name: rec.name as string,
+      paymentHash: rec.payment_hash as string,
     };
   }
 
@@ -98,8 +100,9 @@ export class DB {
         units,
         is_builtin,
         env,
-        deployed
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        deployed,
+        payment_hash
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE
       SET
         ports_from = ?,
@@ -121,6 +124,8 @@ export class DB {
       c.isBuiltin ? 1 : 0,
       env,
       c.deployed ? 1 : 0,
+      c.paymentHash || "",
+
       c.portsFrom,
       c.docker || "",
       c.units,
@@ -128,6 +133,30 @@ export class DB {
       c.deployed ? 1 : 0
     );
     if (!f.changes) throw new Error("Failed to upsert container");
+  }
+
+  public setContainerPaymentHash(pubkey: string, paymentHash: string) {
+    const up = this.db.prepare(`
+      UPDATE containers SET payment_hash = ? WHERE pubkey = ?
+    `);
+    const r = up.run(paymentHash, pubkey);
+    if (!r.changes) throw new Error("Failed to set container payment_hash");
+  }
+
+  public setContainerPaidUntil(pubkey: string, paidUntil: number) {
+    const up = this.db.prepare(`
+      UPDATE containers SET paid_until = ? WHERE pubkey = ?
+    `);
+    const r = up.run(paidUntil, pubkey);
+    if (!r.changes) throw new Error("Failed to set container paid_until");
+  }
+
+  public deleteContainer(pubkey: string) {
+    const del = this.db.prepare(`
+      DELETE FROM containers WHERE pubkey = ?
+    `);
+    const r = del.run(pubkey);
+    if (!r.changes) throw new Error("Failed to delete container");
   }
 
   public getMaxPortsFrom() {
@@ -141,7 +170,7 @@ export class DB {
   public listContainers() {
     const select = this.db.prepare(`SELECT * FROM containers`);
     const recs = select.all();
-    return recs.map(r => this.recToContainer(r));
+    return recs.map((r) => this.recToContainer(r));
   }
 
   // public addMiningFeePaid(fee: number) {

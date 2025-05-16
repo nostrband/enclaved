@@ -1,23 +1,6 @@
 import { generateSecretKey } from "nostr-tools";
-import { EnclavedClient } from "../enclaved-client";
+import { EnclavedClient } from "../modules/enclaved-client";
 
-// async function getPrivkey() {
-//   console.log("Enter nsec:");
-//   let line = await readLine();
-//   line = line.trim();
-//   if (line.startsWith("nsec1")) {
-//     const { type, data } = nip19.decode(line);
-//     if (type !== "nsec") throw new Error("Invalid nsec");
-//     line = bytesToHex(data);
-//   }
-//   const privkeyHex = line;
-//   console.log("privkey", privkeyHex);
-
-//   const privkey = Buffer.from(privkeyHex, "hex");
-//   if (privkey.length !== 32) throw new Error("Invalid privkey");
-
-//   return privkey;
-// }
 
 async function getClient(
   relayUrl: string,
@@ -32,25 +15,6 @@ async function getClient(
   await client.start();
   return client;
 }
-
-// async function importKey({
-//   relayUrl,
-//   adminPubkey,
-//   keyRelay,
-// }: {
-//   relayUrl: string;
-//   adminPubkey: string;
-//   keyRelay: string;
-// }) {
-//   const privkey = await getPrivkey();
-//   const client = await getClient(relayUrl, adminPubkey, privkey);
-//   const reply = await client.send({
-//     method: "import_key",
-//     params: [privkey.toString("hex"), keyRelay],
-//   });
-//   if (reply !== "ok") throw new Error("Invalid reply");
-//   console.log("Key imported to enclave");
-// }
 
 async function ping({
   relayUrl,

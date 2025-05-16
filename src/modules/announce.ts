@@ -8,6 +8,7 @@ import {
   prepareRootCertificate,
   publishInstance,
   publishInstanceProfile,
+  publishNip65Relays,
   publishStats,
   signPublish,
 } from "./nostr";
@@ -26,11 +27,15 @@ export interface AnnounceParams {
 async function announce(p: AnnounceParams) {
   const pubkey = await p.signer.getPublicKey();
 
+  // attestation
   const attestation = nsmGetAttestationInfo(pubkey, p.prod);
   console.log("attestation", attestation);
 
   // root cert / aws attestation event
   const root = await prepareRootCertificate(attestation, p.signer);
+
+  // kind 10002
+  await publishNip65Relays(p.signer, p.instanceAnnounceRelays);
 
   // kind 63793
   await publishInstance(p, attestation, root);

@@ -18,6 +18,12 @@ export const KIND_ENCLAVED_PROCESS = 63797;
 export const KIND_ROOT_CERTIFICATE = 23793;
 export const KIND_ENCLAVED_CERTIFICATE = 23797;
 
+export const KIND_ENCLAVED_PRODUCT = 63790;
+export const KIND_ENCLAVED_RELEASE = 63791;
+export const KIND_ENCLAVED_RELEASE_SIGNATURE = 63792;
+
+export const KIND_DOCKER_DIFF = 63800;
+
 // created 29.04.25
 export const KIND_ENCLAVED_RPC = 29425;
 
@@ -27,3 +33,8 @@ export const ANNOUNCEMENT_INTERVAL = 3600000; // 1h
 export const MIN_PORTS_FROM = 5000;
 export const PORTS_PER_CONTAINER = 100;
 export const CERT_TTL = 3 * 3600; // 3h
+
+export const CONF_FILE = "enclaved.json";
+
+export const TOTAL_UNITS = 100;
+export const SATS_PER_UNIT_PER_HOUR = 5;

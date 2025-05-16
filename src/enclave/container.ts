@@ -1,14 +1,13 @@
-import { up, logs, down } from "../docker";
-import { DBContainer } from "../db";
-import { prepareRootCertificate, publishContainerInfo } from "../nostr";
-import { PrivateKeySigner } from "../signer";
-import { Signer } from "../types";
-import { nsmGetAttestationInfo } from "../nsm";
+import { up, logs, down } from "../modules/docker";
+import { DBContainer } from "../modules/db";
+import { prepareRootCertificate, publishContainerInfo } from "../modules/nostr";
+import { nsmGetAttestationInfo } from "../modules/nsm";
+import { PrivateKeySigner } from "../modules/signer";
 
 export interface ContainerContext {
   dir: string;
   prod: boolean;
-  serviceSigner: Signer;
+  serviceSigner: PrivateKeySigner;
   relays: string[];
   contEndpoint: string;
 }
@@ -16,6 +15,8 @@ export interface ContainerContext {
 export class Container {
   private context: ContainerContext;
   info: DBContainer;
+  appInfo?: any;
+  announcing: boolean = false;
 
   constructor(info: DBContainer, context: ContainerContext) {
     this.info = info;
@@ -23,11 +24,15 @@ export class Container {
   }
 
   setDeployed(d: boolean) {
-    if (d && !this.info.deployed) this.startAnnouncing();
+    if (d) this.ensureAnnouncing();
     this.info.deployed = d;
   }
 
-  private async startAnnouncing() {
+  private async ensureAnnouncing() {
+    if (!this.announcing) return;
+
+    this.announcing = true;
+
     const announce = async () => {
       const info = nsmGetAttestationInfo(
         await this.context.serviceSigner.getPublicKey(),
@@ -37,15 +42,20 @@ export class Container {
         info,
         this.context.serviceSigner
       );
-      await publishContainerInfo({
-        info: this.info,
-        root,
-        serviceSigner: this.context.serviceSigner,
-        relays: this.context.relays,
-      });
+      try {
+        await publishContainerInfo({
+          info: this.info,
+          root,
+          serviceSigner: this.context.serviceSigner,
+          relays: this.context.relays,
+        });  
+      } catch (e) {
+        console.error("failed to publish container info", e);
+      }
     };
 
     await announce();
+
     setInterval(announce, 600000);
   }
 
@@ -54,7 +64,7 @@ export class Container {
 
     await up(this.info, this.context);
 
-    if (this.info.deployed) this.startAnnouncing();
+    this.ensureAnnouncing();
   }
 
   async down() {

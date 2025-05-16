@@ -1,7 +1,7 @@
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import { Event, Filter } from "nostr-tools";
-import { Relay } from "../relay";
-import { normalizeRelay } from "../utils";
+import { Relay } from "../modules/relay";
+import { normalizeRelay } from "../modules/utils";
 
 const KIND_CONTACTS = 3;
 const KIND_RELAYS = 10002;

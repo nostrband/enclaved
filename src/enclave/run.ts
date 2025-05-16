@@ -3,7 +3,7 @@ nsmInit();
 
 import { WebSocket } from "ws";
 import { startEnclave } from "./index";
-import { nsmInit } from "../nsm";
+import { nsmInit } from "../modules/nsm";
 
 // @ts-ignore
 global.WebSocket ??= WebSocket;

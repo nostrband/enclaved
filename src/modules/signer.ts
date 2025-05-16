@@ -12,6 +12,10 @@ export class PrivateKeySigner implements Signer {
     this.privkey = privkey;
   }
 
+  public unsafeGetSeckey() {
+    return this.privkey;
+  }
+
   public getPublicKey() {
     return Promise.resolve(getPublicKey(this.privkey));
   }
