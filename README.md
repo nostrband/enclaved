@@ -52,7 +52,7 @@ The `enclaved` server advertises itself on the Nostr network when launched to en
 
 ## Disk persistence
 
-As we might occasionally desire to restart the enclave without changing the code image, there must be a way to backup and recover the data from inside the enclave. 
+Even if there were no plans to upgrade the code, we might occasionally need to restart the enclave, so there must be a way to backup and recover the data from the enclave. 
 
 The approach recommended by AWS is to use AWS Key Management Service to store a private key that would be used by the enclave to encrypt it's data and send it to parent. On restart, enclave would request the keys back from KMS (which would check if PCR values are the same, etc) and then recover and decrypt the data.
 
@@ -62,11 +62,24 @@ NOTE: the custom key storage service isn't implemented yet, so all existing inst
 
 ## Code updates
 
-The big question is: if clients rely on code hackes to verify the server, how can server push updates?
+The big question is: if clients rely on code hashes to verify the server, how can server be updated?
 
-It's ok when you control your own client and can update them both, but it's not OK when clients are third-parties. 
+It's ok when you control your own client and can update them both, but it's not ok when clients are third-parties. 
 
-That's where Nostr and our custom key storage are gonna help. The plan is to have app maintainers publish `releases` with expected code hashes on Nostr, and let key storage only release data to the updated enclave if new hashes are properly signed by maintainers. 
+That's where Nostr and our custom key storage are gonna help. The plan is to have app maintainers publish `releases` with expected code hashes on Nostr, and let key storage apply policies like *only release keys to the updated enclave if new hashes are properly signed by maintainers*, etc. 
 
-The details aren't implemented yet, if you want to help build this out - send PRs.
+The details TBD, if you want to help build this out - send your ideas.
+
+## Exposing open ports
+
+This is TBD, we plan to use [Caddy](https://caddyserver.com/) inside the enclave to provide E2EE TLS encryption, network stack should work, but more research is needed on how to handle DNS, etc.
+
+## Client interface
+
+This is TBD, the plan is to have HTTP API, Nostr RPC API and control over Nostr notes/DMs, ala *"@enclave-instance deploy docker/image..."*. You get a quote and invoice, and the image is deployed if paid. Each container has a zap-able Nostr profile, so you or someone else could topup the balance by zapping or sending sats using hundreds of LN wallets and Nostr apps. Container app might even topup it's own balance itself if it's earning sats... *AI agents, AI agents everywhere!*
+
+## Contribution
+
+This is prototype, if you're interested in helping shape it - send suggestions and PRs.
+
 
