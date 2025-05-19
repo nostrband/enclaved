@@ -1,6 +1,8 @@
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { DatabaseSync } from "node:sqlite";
 
+export type ContainerState = "waiting" | "deployed" | "paused";
+
 export interface DBContainer {
   id: number;
   pubkey: string;
@@ -14,7 +16,7 @@ export interface DBContainer {
   paidUntil: number;
   isBuiltin: boolean;
   env?: any;
-  deployed: boolean;
+  state: ContainerState;
   paymentHash?: string;
 }
 
@@ -37,7 +39,7 @@ export class DB {
         paid_until INTEGER DEFAULT 0,
         is_builtin INTEGER DEFAULT 0,
         env TEXT DEFAULT '',
-        deployed INTEGER DEFAULT 0,
+        state TEXT,
         payment_hash TEXT DEFAULT ''
       )
     `);
@@ -46,12 +48,16 @@ export class DB {
       ON containers (pubkey)
     `);
     this.db.exec(`
-      CREATE INDEX IF NOT EXISTS containers_admin_pubkey_index 
+      CREATE INDEX IF NOT EXISTS containers_admin_pubkey_index
       ON containers (admin_pubkey)
     `);
     this.db.exec(`
-      CREATE UNIQUE INDEX IF NOT EXISTS containers_name_index 
+      CREATE UNIQUE INDEX IF NOT EXISTS containers_name_index
       ON containers (name)
+    `);
+    this.db.exec(`
+      CREATE INDEX IF NOT EXISTS containers_state_index
+      ON containers (state)
     `);
   }
 
@@ -63,7 +69,8 @@ export class DB {
     return {
       id: rec.id as number,
       adminPubkey: (rec.admin_pubkey as string) || undefined,
-      deployed: (rec.deployed || 0) > 0,
+      // @ts-ignore
+      state: rec.state as string,
       isBuiltin: (rec.is_builtin || 0) > 0,
       paidUntil: (rec.paid_until as number) || 0,
       portsFrom: rec.ports_from as number,
@@ -100,7 +107,7 @@ export class DB {
         units,
         is_builtin,
         env,
-        deployed,
+        state,
         payment_hash
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE
@@ -109,7 +116,7 @@ export class DB {
         docker = ?,
         units = ?,
         env = ?,
-        deployed = ?
+        state = ?
     `);
     const env = c.env ? JSON.stringify(c.env) : "";
     const f = upsert.run(
@@ -123,14 +130,14 @@ export class DB {
       c.units,
       c.isBuiltin ? 1 : 0,
       env,
-      c.deployed ? 1 : 0,
+      c.state,
       c.paymentHash || "",
 
       c.portsFrom,
       c.docker || "",
       c.units,
       env,
-      c.deployed ? 1 : 0
+      c.state
     );
     if (!f.changes) throw new Error("Failed to upsert container");
   }

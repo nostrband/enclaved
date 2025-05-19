@@ -41,7 +41,7 @@ rm -Rf ./supervisord_0.7.3_Linux_64-bit ./supervisord_0.7.3_Linux_64-bit.tar.gz
 # rclone
 wget https://downloads.rclone.org/v1.69.2/rclone-v1.69.2-linux-amd64.rpm
 sha256sum rclone-v1.69.2-linux-amd64.rpm | grep 13a7921b13e7e34ceef9a0ac51b98769449d3d601dee2eb9a78bd86eb7bab3f4
-dnf install rclone-v1.69.2-linux-amd64.rpm -y 
+sudo dnf install rclone-v1.69.2-linux-amd64.rpm -y
 
 # age (encryption)
 wget https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
@@ -49,3 +49,14 @@ sha256sum age-v1.2.1-linux-amd64.tar.gz | grep 7df45a6cc87d4da11cc03a539a7470c15
 tar -xvzf age-v1.2.1-linux-amd64.tar.gz --strip-components=1 age/age
 tar -xvzf age-v1.2.1-linux-amd64.tar.gz --strip-components=1 age/age-keygen
 rm -Rf age-v1.2.1-linux-amd64.tar.gz
+
+# git
+sudo dnf install -y git
+
+# node
+wget https://nodejs.org/dist/v24.0.1/node-v24.0.1-linux-x64.tar.xz
+sha256sum node-v24.0.1-linux-x64.tar.xz | grep 12d8b7c7dd9191bd4f3afe872c7d4908ac75d2a6ef06d2ae59c0b4aa384bc875
+sudo tar -xJf node-v24.0.1-linux-x64.tar.xz -C /usr/local --strip-components=1 && rm node-v24.0.1-linux-x64.tar.xz
+
+# nix
+sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon

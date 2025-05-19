@@ -71,7 +71,8 @@ fn get_eth_interface() -> anyhow::Result<(String, u32)> {
     while !ifap_iter.is_null() {
         let name = unsafe { CStr::from_ptr((*ifap_iter).ifa_name) };
         if (unsafe { strncmp(name.as_ptr(), "eth".as_ptr().cast(), 3) } == 0
-            || unsafe { strncmp(name.as_ptr(), "ens".as_ptr().cast(), 3) } == 0)
+            || unsafe { strncmp(name.as_ptr(), "ens".as_ptr().cast(), 3) } == 0
+            || unsafe { strncmp(name.as_ptr(), "enp".as_ptr().cast(), 3) } == 0)
             && unsafe { (*(*ifap_iter).ifa_addr).sa_family == libc::AF_INET as u16 }
         {
             ifname = name.to_str().context("non utf8 interface")?.to_owned();

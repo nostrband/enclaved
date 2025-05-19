@@ -14,8 +14,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     containerd.io=1.7.27-1 \
     rclone=1.53.3-4ubuntu1.22.04.3 \
     xfsprogs=5.13.0-1ubuntu2.1 \
-    nodejs=24.0.1-1nodesource1 \
     "lsof=4.93.2+dfsg-1.1build2" \
+    xz-utils=5.2.5-2ubuntu1 \
     "psmisc=23.4-2build3"
 
 #apt show lsof psmisc

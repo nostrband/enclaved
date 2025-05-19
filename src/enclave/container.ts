@@ -1,5 +1,5 @@
 import { up, logs, down } from "../modules/docker";
-import { DBContainer } from "../modules/db";
+import { ContainerState, DBContainer } from "../modules/db";
 import { prepareRootCertificate, publishContainerInfo } from "../modules/nostr";
 import { nsmGetAttestationInfo } from "../modules/nsm";
 import { PrivateKeySigner } from "../modules/signer";
@@ -23,9 +23,9 @@ export class Container {
     this.context = context;
   }
 
-  setDeployed(d: boolean) {
-    if (d) this.ensureAnnouncing();
-    this.info.deployed = d;
+  setState(s: ContainerState) {
+    if (s !== "waiting") this.ensureAnnouncing();
+    this.info.state = s;
   }
 
   private async ensureAnnouncing() {

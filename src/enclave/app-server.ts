@@ -67,7 +67,7 @@ export class AppServer extends EnclavedServer {
       this.conts.set(cont.info.pubkey, cont);
 
       // already deployed?
-      if (info.deployed) {
+      if (info.state === "deployed") {
         await this.deploy(cont);
       } else {
         // check it's invoice and deploy or cleanup
@@ -91,7 +91,7 @@ export class AppServer extends EnclavedServer {
       : MIN_PORTS_FROM;
     return {
       id: 0,
-      deployed: false,
+      state: "waiting",
       isBuiltin,
       paidUntil: 0,
       portsFrom,
@@ -126,12 +126,24 @@ export class AppServer extends EnclavedServer {
         console.log("error charging container", cont.info.pubkey, e);
         if (e === "INSUFFICIENT_BALANCE") {
           // FIXME pause etc
+          console.log("INSUFFICIENT_BALANCE", cont.info.pubkey, cont.info.docker);
+          this.pause(cont);
+          return;
         }
       }
     }
 
     // schedule next charge
     this.scheduleCharging(cont);
+  }
+
+  private async pause(cont: Container) {
+    // mark as deployed
+    cont.setState("paused");
+    this.db.upsertContainer(cont.info);
+
+    // launch
+    await cont.down();
   }
 
   private scheduleCharging(cont: Container) {
@@ -149,7 +161,7 @@ export class AppServer extends EnclavedServer {
 
   private async deploy(cont: Container) {
     // mark as deployed
-    cont.setDeployed(true);
+    cont.setState("deployed");
     this.db.upsertContainer(cont.info);
 
     // launch

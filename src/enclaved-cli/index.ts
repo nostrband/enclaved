@@ -1,7 +1,6 @@
 import { generateSecretKey } from "nostr-tools";
 import { EnclavedClient } from "../modules/enclaved-client";
 
-
 async function getClient(
   relayUrl: string,
   signerPubkey: string,
@@ -37,17 +36,19 @@ async function ping({
 async function launch({
   relayUrl,
   adminPubkey,
-  dockerImage,
+  docker,
+  units,
 }: {
   relayUrl: string;
   adminPubkey: string;
-  dockerImage: string;
+  docker: string;
+  units: number;
 }) {
   const privkey = generateSecretKey();
   const client = await getClient(relayUrl, adminPubkey, privkey);
   const reply = await client.send({
     method: "launch",
-    params: { docker: dockerImage },
+    params: { docker, units },
   });
   console.log("launch", reply);
 }
@@ -65,8 +66,9 @@ export function mainEnclavedCli(argv: string[]) {
     case "launch": {
       const relayUrl = argv[1];
       const adminPubkey = argv[2];
-      const dockerImage = argv[3]
-      return launch({ relayUrl, adminPubkey, dockerImage });
+      const docker = argv[3];
+      const units = Number(argv[4]);
+      return launch({ relayUrl, adminPubkey, docker, units });
     }
     default: {
       throw new Error("Unknown command");

@@ -43,7 +43,7 @@ export class Nip46Client extends Client implements Signer {
     const secret = bytesToHex(randomBytes(16));
     const nostrconnect = `nostrconnect://${getPublicKey(this.privkey!)}?relay=${
       this.relay.url
-    }&perms=${this.perms}&name=noauth_enclaved_cli&secret=${secret}`;
+    }&perms=${this.perms}&name=enclaved_cli&secret=${secret}`;
     console.log("Connect using this string:");
     console.log(nostrconnect);
 
