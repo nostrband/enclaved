@@ -70,7 +70,6 @@ fn get_eth_interface() -> anyhow::Result<(String, u32)> {
     let mut ifaddr = 0;
     while !ifap_iter.is_null() {
         let name = unsafe { CStr::from_ptr((*ifap_iter).ifa_name) };
-        println!("got ethernet interface: {:?}", name);
         if (unsafe { strncmp(name.as_ptr(), "eth".as_ptr().cast(), 3) } == 0
             || unsafe { strncmp(name.as_ptr(), "ens".as_ptr().cast(), 3) } == 0
             || unsafe { strncmp(name.as_ptr(), "enp".as_ptr().cast(), 3) } == 0)
