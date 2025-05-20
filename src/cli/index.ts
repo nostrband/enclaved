@@ -22,6 +22,7 @@ import { Signer } from "../modules/types";
 import { pcrDigest } from "../modules/aws";
 import { EnclavedClient } from "../modules/enclaved-client";
 import { ParentClient } from "../modules/parent-client";
+import { fetchDockerImageInfo } from "../modules/manifest";
 
 async function readLine() {
   const rl = readline.createInterface({
@@ -280,6 +281,11 @@ async function ensureInstanceSignature(dir: string) {
 
 async function verifyBuild() {}
 
+async function dockerInspect(dockerUrl: string) {
+  const manifest = await fetchDockerImageInfo({ imageRef: dockerUrl });
+  console.log("manifest", manifest);
+}
+
 export function mainCli(argv: string[]) {
   if (!argv.length) throw new Error("Command not specified");
 
@@ -301,6 +307,10 @@ export function mainCli(argv: string[]) {
     case "ensure_instance_signature": {
       const dir = argv?.[1] || "./instance/";
       return ensureInstanceSignature(dir);
+    }
+    case "docker_inspect": {
+      const dockerUrl = argv[1];
+      return dockerInspect(dockerUrl);
     }
     case "publish_build": {
       // docker config/manifest hashes taken from build/docker.json

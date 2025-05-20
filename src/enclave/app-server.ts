@@ -3,14 +3,17 @@ import { DB, DBContainer } from "../modules/db";
 import { EnclavedServer, Reply, Request } from "../modules/enclaved";
 import { Container, ContainerContext } from "./container";
 import {
+  DISK_PER_UNIT_MB,
   MIN_PORTS_FROM,
   PORTS_PER_CONTAINER,
   SATS_PER_UNIT_PER_HOUR,
   TOTAL_UNITS,
 } from "../modules/consts";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
-import { nwc } from "@getalby/sdk";
 import { now } from "../modules/utils";
+import { fromNWC } from "../modules/nwc-client";
+import { NWCTransaction } from "../modules/nwc-types";
+import { fetchDockerImageInfo } from "../modules/manifest";
 
 export class AppServer extends EnclavedServer {
   private context: ContainerContext;
@@ -89,20 +92,21 @@ export class AppServer extends EnclavedServer {
     const portsFrom = maxPortsFrom
       ? maxPortsFrom + PORTS_PER_CONTAINER
       : MIN_PORTS_FROM;
+    const pubkey = getPublicKey(key);
     return {
       id: 0,
       state: "waiting",
       isBuiltin,
       paidUntil: 0,
       portsFrom,
-      pubkey: getPublicKey(key),
+      pubkey,
       seckey: key,
       token: bytesToHex(randomBytes(16)),
       units: params.units || 1,
       adminPubkey: "",
       docker: params.docker,
       env: params.env,
-      name: params.name,
+      name: params.name || pubkey,
     };
   }
 
@@ -126,7 +130,11 @@ export class AppServer extends EnclavedServer {
         console.log("error charging container", cont.info.pubkey, e);
         if (e === "INSUFFICIENT_BALANCE") {
           // FIXME pause etc
-          console.log("INSUFFICIENT_BALANCE", cont.info.pubkey, cont.info.docker);
+          console.log(
+            "INSUFFICIENT_BALANCE",
+            cont.info.pubkey,
+            cont.info.docker
+          );
           this.pause(cont);
           return;
         }
@@ -155,7 +163,7 @@ export class AppServer extends EnclavedServer {
       nextCharge - now()
     );
     if (nextCharge > now())
-      setTimeout(() => this.charge(cont), 1000 * (now() - nextCharge + 1));
+      setTimeout(() => this.charge(cont), 1000 * (nextCharge - now() + 1));
     else this.charge(cont);
   }
 
@@ -168,7 +176,7 @@ export class AppServer extends EnclavedServer {
     await cont.up();
 
     // charge every 1 hour
-    this.scheduleCharging(cont);
+    if (!cont.info.isBuiltin) this.scheduleCharging(cont);
 
     // start printing it's logs
     if (process.env["DEBUG"] === "true") cont.printLogs(true);
@@ -216,13 +224,13 @@ export class AppServer extends EnclavedServer {
       (c) => c.info.name === "nwc-enclaved"
     );
     if (!wallet) throw new Error("No builtin wallet");
-    if (!wallet.appInfo || !!wallet.appInfo.pubkey)
+    if (!wallet.appInfo || !wallet.appInfo.pubkey)
       throw new Error("Wallet not ready yet");
 
     const nostrWalletConnectUrl = `nostr+walletconnect://${
       wallet.appInfo.pubkey
     }?relay=wss%3A%2F%2Frelay.zap.land&secret=${bytesToHex(seckey)}`;
-    return new nwc.NWCClient({ nostrWalletConnectUrl });
+    return fromNWC(nostrWalletConnectUrl);
   }
 
   private createParentNWC() {
@@ -238,7 +246,7 @@ export class AppServer extends EnclavedServer {
     const description = `Enclaved ${cont.info.units} units`;
     const amount = this.getAmountMsat(cont, hours);
     const invoice = await client.makeInvoice({ amount, description });
-    client.close();
+    client.dispose();
     return invoice;
   }
 
@@ -249,7 +257,7 @@ export class AppServer extends EnclavedServer {
     const tx = await client.lookupInvoice({
       payment_hash: cont.info.paymentHash,
     });
-    client.close();
+    client.dispose();
     return tx;
   }
 
@@ -257,7 +265,7 @@ export class AppServer extends EnclavedServer {
     // start watching the invoice
     const to = setInterval(async () => {
       try {
-        let invoice: nwc.Nip47Transaction | undefined;
+        let invoice: NWCTransaction | undefined;
         try {
           invoice = await this.lookupInvoice(cont);
         } catch (e) {
@@ -281,7 +289,7 @@ export class AppServer extends EnclavedServer {
 
           // deploy
           await this.deploy(cont);
-        } else if (invoice.expires_at < now()) {
+        } else if (invoice.expires_at! < now()) {
           // expired
           clearInterval(to);
           console.log("new container expired", cont.info.pubkey);
@@ -300,6 +308,14 @@ export class AppServer extends EnclavedServer {
     }, 3000);
   }
 
+  private async createWallet(cont: Container) {
+    const client = this.createParentNWC();
+    await client.addPubkey({
+      pubkey: cont.info.pubkey,
+    });
+    client.dispose();
+  }
+
   protected async launch(req: Request, res: Reply) {
     if (!req.params.docker) throw new Error("Specify docker url");
     if (!req.params.units || !parseInt(req.params.units))
@@ -311,12 +327,21 @@ export class AppServer extends EnclavedServer {
     if (usedUnits + req.params.units > TOTAL_UNITS)
       throw new Error("Not enough free units");
 
+    const manifest = await fetchDockerImageInfo(req.params.docker);
+    console.log("manifest of", req.params.docker, manifest);
+    const imageSize = manifest.layers.reduce((a, l) => (a += l.size), 0);
+    if (imageSize > (req.params.units * DISK_PER_UNIT_MB) / 1)
+      throw new Error("Need more units for this image");
+
     // create key and container info
     const info = this.createContainerFromParams(req.params, false);
     console.log("new container", req.params.name, info.pubkey, info.portsFrom);
 
     // add to RAM
     const cont = new Container(info, this.context);
+
+    // create wallet first
+    await this.createWallet(cont);
 
     // create invoice
     const invoice = await this.createInvoice(cont);
@@ -341,7 +366,7 @@ export class AppServer extends EnclavedServer {
   public async shutdown() {
     for (const c of this.conts.values()) {
       console.log("shutdown", c.info.pubkey);
-      await c.down();
+      if (c.info.state === "deployed") await c.down();
     }
   }
 }

@@ -10,5 +10,5 @@ sudo mkdir -p /usr/share/nitro_enclaves/blobs-$DT
 echo "Making backup to /usr/share/nitro_enclaves/blobs-$DT"
 sudo rsync -av /usr/share/nitro_enclaves/blobs/* /usr/share/nitro_enclaves/blobs-$DT/
 echo "Copying new kernel blobs"
-sudo rsync -av build/kernels/* /usr/share/nitro_enclaves/blobs/
+sudo rsync -av build/kernels/x86_64/* /usr/share/nitro_enclaves/blobs/
 echo "Done"

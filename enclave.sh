@@ -95,6 +95,10 @@ iptables-save
 # FIXME replace with proper API access
 #docker pull quay.io/skopeo/stable:latest #sha256:8bee970d8dbe1260526f18f99709e8323b640c8b7c0cba27da5ccf622cad47cb
 
+# test network
+curl -v http://65.109.67.137
+curl -v https://google.com
+
 # Finally, start the enclaved process
 ./supervisord-ctl.sh start enclaved
 

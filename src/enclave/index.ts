@@ -53,7 +53,13 @@ export async function startEnclave(opts: {
     onShutdown: async () => {
       console.log(new Date(), "shutdown");
       shutdown = true;
-      await server?.shutdown();
+      try {
+        // if it fails we should proceed to shutting down
+        // in hope to save the state
+        await server?.shutdown();
+      } catch (e) {
+        console.error("Failed to shutdown the app server gracefully", e);
+      }
       exec("./supervisord-ctl.sh", ["shutdown"]);
     },
   });

@@ -24,9 +24,12 @@ EOF
 # apply the above changes
 sudo sysctl -p /etc/sysctl.conf
 
+ETH=`ifconfig |grep mtu | grep -v lo: | grep -v docker | awk 'BEGIN{FS=":"}{print $1}'`
+echo "ETH" $ETH
+
 # iptables rules to route traffic to a nfqueue to be picked up by the proxy
 iptables -P INPUT ACCEPT
-iptables -A INPUT -i ens5 -p tcp --dport 1024:61439 -j NFQUEUE --queue-num 0 #  -m set --match-set portfilter dst -m set ! --match-set internal src -j NFQUEUE --queue-num 0
+iptables -A INPUT -i ${ETH} -p tcp --dport 1024:61439 -j NFQUEUE --queue-num 0 #  -m set --match-set portfilter dst -m set ! --match-set internal src -j NFQUEUE --queue-num 0
 iptables -S
 
 # sudo killall vsock-to-ip-raw-outgoing

@@ -5,6 +5,7 @@
 
 mkdir -p build/vsock
 nix --extra-experimental-features nix-command --extra-experimental-features flakes --accept-flake-config build -v .#gnu.vsock-proxy.uncompressed
+rm -Rf build/vsock/*
 rsync -av result/bin/* build/vsock/
 sudo chown ec2-user:ec2-user build/vsock/*
 chmod u+w build/vsock/*

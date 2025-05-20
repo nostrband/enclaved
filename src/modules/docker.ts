@@ -5,8 +5,8 @@ import { DBContainer } from "./db";
 import { ContainerContext } from "../enclave/container";
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
+import { DISK_PER_UNIT_MB } from "./consts";
 
-const DISK_PER_UNIT_MB = 50;
 
 export interface LaunchRequest {
   dir: string;
@@ -15,33 +15,6 @@ export interface LaunchRequest {
   env?: any;
   key: Uint8Array;
   prod: boolean;
-}
-
-async function checkImage(image: string) {
-  const args = [
-    "run",
-    "--rm",
-    "quay.io/skopeo/stable",
-    "inspect",
-    `docker://docker.io/${image}`,
-  ];
-
-  // format nostrband/nwc-enclaved@sha256:adbf495b2c132e5f0f9a1dc9c20eff51580f9c3127b829d6db7c0fe20f11bbd7
-  const { out, err, code } = await exec("docker", args);
-  if (code !== 0) throw new Error("Failed to fetch docker image");
-
-  try {
-    const info = JSON.parse(out);
-    let size = 0;
-    for (const d of info.LayersData) {
-      size += d.Size;
-    }
-    console.log(new Date(), "docker", image, "size", size);
-    if (size > 300000000) throw new Error("Image too big");
-  } catch (e) {
-    console.error(new Date(), "Bad docker info", image, out, e);
-    throw new Error("Failed to parse image info");
-  }
 }
 
 function getPath(cont: DBContainer, context: ContainerContext) {
@@ -206,8 +179,6 @@ export async function up(cont: DBContainer, context: ContainerContext) {
       throw new Error("Invalid env key");
     env += `\n      ${key}: ${envObj[key]}`;
   }
-
-  // await this.checkImage(req.params.docker);
 
   const path = getPath(cont, context);
   fs.mkdirSync(path, { recursive: true });
