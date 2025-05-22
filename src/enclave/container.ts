@@ -22,9 +22,10 @@ export class Container {
   private context: ContainerContext;
   private announcing = false;
   private state?: ContainerState;
+  private appInfo?: any;
 
   info: DBContainer;
-  appInfo?: any;
+  walletPubkey?: string;
 
   constructor(info: DBContainer, context: ContainerContext) {
     this.info = info;
@@ -51,7 +52,7 @@ export class Container {
     this.info.state = s;
 
     // announcement for existing containers
-    if (!this.state && s !== "waiting") this.announce();
+    if (s !== "waiting") this.announce();
 
     // launch or pause
     if (s === "deployed") await this.up();
@@ -70,11 +71,25 @@ export class Container {
     this.announce();
   }
 
+  public getAppInfo() {
+    return this.appInfo;
+  }
+
+  public setAppInfo(appInfo: any) {
+    if (this.appInfo === appInfo) return;
+    if (this.appInfo?.pubkey !== appInfo?.pubkey) this.announce();
+    this.appInfo = appInfo;
+  }
+
   private async announce() {
     // avoid repeated calls
     if (this.announcing) return;
 
     this.announcing = true;
+
+    // give it 1 sec to batch all the small state updates
+    // that are coming to this container
+    await new Promise(ok => setTimeout(ok, 1000));
 
     try {
       const info = nsmGetAttestationInfo(
@@ -91,6 +106,8 @@ export class Container {
           root,
           serviceSigner: this.context.serviceSigner,
           relays: this.context.instanceAnnounceRelays || DEFAULT_RELAYS,
+          appPubkey: this.appInfo?.pubkey,
+          walletPubkey: this.walletPubkey,
         });
       } catch (e) {
         console.error("failed to publish container info", e);

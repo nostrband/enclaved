@@ -251,6 +251,8 @@ export async function publishContainerInfo(params: {
   root: Event;
   serviceSigner: Signer;
   relays: string[];
+  appPubkey?: string;
+  walletPubkey?: string;
   // stats: any;
 }) {
   const containerSigner = new PrivateKeySigner(params.info.seckey);
@@ -280,6 +282,7 @@ export async function publishContainerInfo(params: {
     containerInfo.tags.push(["p", params.info.adminPubkey, "admin"]);
   if (params.info.docker)
     containerInfo.tags.push(["r", params.info.docker, "docker"]);
+  if (params.appPubkey) containerInfo.tags.push(["p", params.appPubkey, "app"]);
 
   const containerEvent = await signPublish(containerInfo, containerSigner, [
     ...params.relays,
@@ -292,24 +295,38 @@ export async function publishContainerInfo(params: {
     DEFAULT_RELAYS
   );
 
-  const docker = params.info.docker ? `Docker: ${params.info.docker}` : "";
+  const docker = params.info.docker ? `Docker: ${params.info.docker}\n` : "";
+  const app = params.appPubkey
+    ? `App instance: nostr:${nip19.npubEncode(params.appPubkey)}\n`
+    : "";
+  const admin = params.info.adminPubkey
+    ? `Admin: nostr:${nip19.npubEncode(params.info.adminPubkey)}\n`
+    : "";
+  const content: any = {
+    name: `container ${params.info.docker || ""}`,
+    about: `
+This is a container running inside enclaved server.\n
+Learn more at ${REPO}\n
+${docker}
+${app}
+${admin}
+State: ${params.info.state}\n
+Balance: ${Math.floor(params.info.balance / 1000)}\n
+`,
+    picture: "",
+  };
+
+  if (params.walletPubkey) {
+    const npub = nip19.npubEncode(pubkey);
+    const walletNpub = nip19.npubEncode(params.walletPubkey);
+    content.lud16 = `${npub}@${walletNpub}.zap.land`;
+  }
+
   const profile: UnsignedEvent = {
     pubkey,
     kind: KIND_PROFILE,
     created_at: now(),
-    content: JSON.stringify({
-      name: `container ${params.info.docker || ""}`,
-      //      lud16: `${npub}@${npub}.zap.land`,
-      about: `
-This is a container running inside enclaved server.\n
-${docker}\n
-Learn more at ${REPO}\n
-State: ${params.info.state}\n
-Admin: ${params.info.adminPubkey || ""}\n
-Balance: ${Math.floor(params.info.balance / 1000)}\n
-`,
-      picture: "",
-    }),
+    content: JSON.stringify(content),
     tags: [["t", "enclaved-container"]],
   };
 

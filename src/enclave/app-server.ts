@@ -309,9 +309,8 @@ export class AppServer extends EnclavedServer {
 
   public async setContainerAppInfo(cont: Container, info: any) {
     const isWallet = cont.info.name === "nwc-enclaved";
-    const oldInfo = cont.appInfo;
-
-    cont.appInfo = info;
+    const oldInfo = cont.getAppInfo();
+    cont.setAppInfo(info);
 
     // wallet updated it's pubkey?
     if (isWallet && oldInfo?.pubkey !== info.pubkey) {
@@ -335,21 +334,26 @@ export class AppServer extends EnclavedServer {
     await this.updateBalance(cont);
   }
 
+  private getWalletPubkey() {
+    const wallet = [...this.conts.values()].find(
+      (c) => c.info.name === "nwc-enclaved"
+    );
+    if (!wallet) throw new Error("No builtin wallet");
+    if (!wallet.getAppInfo() || !wallet.getAppInfo().pubkey)
+      throw new Error("Wallet not ready yet");
+
+    return wallet.getAppInfo().pubkey;
+  }
+
   private getNWCForKey(seckey: Uint8Array) {
     const pubkey = getPublicKey(seckey);
     const existingClient = this.nwcClients.get(pubkey);
     if (existingClient) return existingClient;
 
-    const wallet = [...this.conts.values()].find(
-      (c) => c.info.name === "nwc-enclaved"
-    );
-    if (!wallet) throw new Error("No builtin wallet");
-    if (!wallet.appInfo || !wallet.appInfo.pubkey)
-      throw new Error("Wallet not ready yet");
-
-    const nostrWalletConnectUrl = `nostr+walletconnect://${
-      wallet.appInfo.pubkey
-    }?relay=${encodeURIComponent(NWC_RELAY)}&secret=${bytesToHex(seckey)}`;
+    const walletPubkey = this.getWalletPubkey();
+    const relay = encodeURIComponent(NWC_RELAY);
+    const secret = bytesToHex(seckey);
+    const nostrWalletConnectUrl = `nostr+walletconnect://${walletPubkey}?relay=${relay}&secret=${secret}`;
     const client = fromNWC(nostrWalletConnectUrl, this.nwcRelay, () => {
       this.onWalletTx(pubkey);
     });
@@ -420,10 +424,16 @@ export class AppServer extends EnclavedServer {
 
   private async ensureWallet(cont: Container) {
     try {
+      // set it's wallet
+      cont.walletPubkey = this.getWalletPubkey();
+
+      // add cont pubkey to allowed pubkeys on the wallet
       const parent = this.getParentNWC();
       await parent.addPubkey({
         pubkey: cont.info.pubkey,
       });
+
+      // create nwc client to monitor container events
       this.getNWCForKey(cont.info.seckey);
     } catch {}
   }
