@@ -3,23 +3,30 @@ import { DB, DBContainer } from "../modules/db";
 import { EnclavedServer, Reply, Request } from "../modules/enclaved";
 import { Container, ContainerContext } from "./container";
 import {
+  CHARGE_INTERVAL,
   DISK_PER_UNIT_MB,
   MIN_PORTS_FROM,
+  NWC_RELAY,
   PORTS_PER_CONTAINER,
-  SATS_PER_UNIT_PER_HOUR,
+  SATS_PER_UNIT_PER_INTERVAL,
   TOTAL_UNITS,
 } from "../modules/consts";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import { now } from "../modules/utils";
-import { fromNWC } from "../modules/nwc-client";
+import { fromNWC, NWCClient } from "../modules/nwc-client";
 import { NWCTransaction } from "../modules/nwc-types";
 import { fetchDockerImageInfo } from "../modules/manifest";
+import { Relay } from "../modules/relay";
 
 export class AppServer extends EnclavedServer {
+  private off: boolean = false;
   private context: ContainerContext;
   private conf: any;
   private db: DB;
   private conts = new Map<string, Container>();
+  private nwcRelay = new Relay(NWC_RELAY);
+  private nwcClients = new Map<string, NWCClient>();
+  private startedContainers = false;
 
   constructor(context: ContainerContext, conf: any) {
     super(context.serviceSigner);
@@ -27,20 +34,7 @@ export class AppServer extends EnclavedServer {
     this.context = context;
     this.db = new DB(context.dir + "/containers.db");
     console.log("existing containers:");
-    this.db
-      .listContainers()
-      .map((c) =>
-        console.log(
-          "p",
-          c.pubkey,
-          "name",
-          c.name,
-          "builtin",
-          c.isBuiltin,
-          "docker",
-          c.docker
-        )
-      );
+    this.db.listContainers().map((c) => console.log("cont", c));
   }
 
   public getContext(): ContainerContext {
@@ -52,10 +46,18 @@ export class AppServer extends EnclavedServer {
   }
 
   public async start() {
+    // launch built-in containers first
     if (this.conf.builtin) {
       console.log("builtin", this.conf.builtin);
       await this.startBuiltin(this.conf.builtin);
     }
+
+    // watch container uptime
+    this.uptimeMonitor();
+  }
+
+  private async startContainers() {
+    this.startedContainers = true;
 
     // now start other containers from db
     const conts = this.db.listContainers();
@@ -69,14 +71,20 @@ export class AppServer extends EnclavedServer {
       const cont = new Container(info, this.context);
       this.conts.set(cont.info.pubkey, cont);
 
-      // already deployed?
-      if (info.state === "deployed") {
-        await this.deploy(cont);
-      } else {
-        // check it's invoice and deploy or cleanup
-        this.watchNewContPayment(cont);
-      }
+      // make sure NWC client is created and starts watching notifications
+      await this.ensureWallet(cont);
+
+      // make sure balances are up to date,
+      // from now on we'll be subscribed to balance
+      // events and will keep it updated
+      await this.updateBalance(cont);
+
+      // launch deployed container etc
+      await cont.changeState(cont.info.state);
     }
+
+    // start charge monitor
+    await this.chargeMonitor();
   }
 
   public containerCount() {
@@ -88,16 +96,20 @@ export class AppServer extends EnclavedServer {
     isBuiltin: boolean
   ): DBContainer {
     const key = generateSecretKey();
-    const maxPortsFrom = this.db.getMaxPortsFrom();
-    const portsFrom = maxPortsFrom
-      ? maxPortsFrom + PORTS_PER_CONTAINER
-      : MIN_PORTS_FROM;
+    let portsFrom = MIN_PORTS_FROM;
+    const conts = [...this.conts.values()];
+
+    // find unused range
+    while (conts.find((c) => c.info.portsFrom === portsFrom))
+      portsFrom += PORTS_PER_CONTAINER;
+
     const pubkey = getPublicKey(key);
     return {
       id: 0,
       state: "waiting",
       isBuiltin,
-      paidUntil: 0,
+      uptimeCount: 0,
+      uptimePaid: 0,
       portsFrom,
       pubkey,
       seckey: key,
@@ -107,76 +119,155 @@ export class AppServer extends EnclavedServer {
       docker: params.docker,
       env: params.env,
       name: params.name || pubkey,
+      balance: 0,
     };
   }
 
-  private async charge(cont: Container) {
-    const parent = this.createParentNWC();
-    const amount = this.getAmountMsat(cont, 1);
+  private async uptimeMonitor() {
+    while (!this.off) {
+      const start = Date.now();
 
-    // keep trying to charge until extended over 'now'
-    while (cont.info.paidUntil <= now()) {
+      let count = 0;
+      for (const c of this.conts.values()) {
+        if (c.info.isBuiltin || c.info.state !== "deployed") continue;
+        c.info.uptimeCount += 1;
+        this.db.setContainerUptimeCount(c.info.pubkey, c.info.uptimeCount);
+        count++;
+      }
+      console.log(Date.now(), "active paid conts", count);
+
+      // wait 1 sec, compensate for the execution time above
+      const diff = Date.now() - start;
+      await new Promise((ok) => setTimeout(ok, 1000 - diff));
+    }
+  }
+
+  private async chargeMonitor() {
+    // scan containers every 1 second to check
+    // if we need to change their state
+    while (!this.off) {
+      const start = Date.now();
+
+      console.log(Date.now(), "charge monitor");
+      for (const c of this.conts.values()) {
+        if (c.info.isBuiltin) continue;
+
+        // already deployed?
+        if (c.info.state === "deployed") {
+          if (c.info.uptimePaid <= c.info.uptimeCount) {
+            // unpaid? try to charge, no need to
+            // check balance - if charge fails we'll switch
+            // the state and won't retry here
+            const ok = await this.charge(c);
+            // stop if insufficient_balance returned
+            if (!ok) await this.pause(c);
+          }
+        } else if (c.info.state === "paused") {
+          // paused and paid for some reason
+          if (c.info.uptimePaid > c.info.uptimeCount) {
+            // make sure it's running
+            await this.deploy(c);
+          } else if (this.hasEnoughBalance(c)) {
+            // only try charging if seems to have enough
+            // balance
+            const ok = await this.charge(c);
+            if (ok) await this.deploy(c);
+          }
+        } else if (c.info.state === "waiting") {
+          // check the launch invoice, if ok - deploy,
+          // if expired - the container will be removed
+          const r = await this.checkWaitingPayment(c);
+          if (r) await this.deploy(c);
+        }
+      }
+
+      // pause for 1 sec
+      const diff = Date.now() - start;
+      await new Promise((ok) => setTimeout(ok, 1000 - diff));
+    }
+  }
+
+  private async updateBalance(cont: Container) {
+    const client = this.getNWC(cont);
+    const { balance } = await client.getBalance();
+    if (balance !== cont.info.balance) {
+      cont.setBalance(balance);
+      this.db.setContainerBalance(cont.info.pubkey, balance);
+    }
+  }
+
+  private hasEnoughBalance(cont: Container) {
+    return this.getAmountMsat(cont) <= cont.info.balance;
+  }
+
+  private async charge(cont: Container) {
+    if (cont.info.isBuiltin) return;
+
+    // keep trying to charge until extended over uptimeCount
+    while (cont.info.uptimePaid <= cont.info.uptimeCount) {
       try {
+        const parent = this.getParentNWC();
+        const container = this.getNWC(cont);
+
+        // amount to pay from container to parent
+        const amount = this.getAmountMsat(cont);
+
+        // parent makes an invoice
         const invoice = await parent.makeInvoice({
           amount,
           description: `Enclaved ${cont.info.units} units`,
         });
-        const container = this.createNWC(cont);
+        console.log("invoice", invoice);
+
+        // container pays the invoice
         await container.payInvoice({ invoice: invoice.invoice });
-        cont.info.paidUntil += 3600;
-        this.db.setContainerPaidUntil(cont.info.pubkey, cont.info.paidUntil);
-        console.log("container charged", cont.info.pubkey, cont.info.paidUntil);
-      } catch (e) {
+
+        // extend
+        cont.info.uptimePaid += CHARGE_INTERVAL;
+        this.db.setContainerUptimePaid(cont.info.pubkey, cont.info.uptimePaid);
+        console.log(
+          "container charged",
+          cont.info.pubkey,
+          cont.info.uptimePaid
+        );
+
+        // balance changed, update in background
+        this.updateBalance(cont);
+      } catch (e: any) {
         console.log("error charging container", cont.info.pubkey, e);
-        if (e === "INSUFFICIENT_BALANCE") {
-          // FIXME pause etc
+
+        if (e?.message === "INSUFFICIENT_BALANCE") {
           console.log(
             "INSUFFICIENT_BALANCE",
             cont.info.pubkey,
             cont.info.docker
           );
-          this.pause(cont);
-          return;
+          // make sure we have updated balance to
+          // avoid trying to charge again and again
+          await this.updateBalance(cont);
+
+          // insufficient balance
+          return false;
         }
+
+        // pause
+        await new Promise((ok) => setTimeout(ok, 1000));
       }
     }
 
-    // schedule next charge
-    this.scheduleCharging(cont);
+    return true;
   }
 
   private async pause(cont: Container) {
     // mark as deployed
-    cont.setState("paused");
-    this.db.upsertContainer(cont.info);
-
-    // launch
-    await cont.down();
-  }
-
-  private scheduleCharging(cont: Container) {
-    const nextCharge = cont.info.paidUntil + 3600;
-    console.log(
-      "container next charge",
-      cont.info.pubkey,
-      "in",
-      nextCharge - now()
-    );
-    if (nextCharge > now())
-      setTimeout(() => this.charge(cont), 1000 * (nextCharge - now() + 1));
-    else this.charge(cont);
+    await cont.changeState("paused");
+    this.db.setContainerState(cont.info.pubkey, cont.info.state);
   }
 
   private async deploy(cont: Container) {
     // mark as deployed
-    cont.setState("deployed");
-    this.db.upsertContainer(cont.info);
-
-    // launch
-    await cont.up();
-
-    // charge every 1 hour
-    if (!cont.info.isBuiltin) this.scheduleCharging(cont);
+    await cont.changeState("deployed");
+    this.db.setContainerState(cont.info.pubkey, cont.info.state);
 
     // start printing it's logs
     if (process.env["DEBUG"] === "true") cont.printLogs(true);
@@ -204,22 +295,51 @@ export class AppServer extends EnclavedServer {
         info.units = params.units;
       }
 
+      // save updated info
+      this.db.upsertContainer(info);
+
+      // add to our list
       const cont = new Container(info, this.context);
       this.conts.set(cont.info.pubkey, cont);
 
+      // launch
       await this.deploy(cont);
     }
   }
 
   public async setContainerAppInfo(cont: Container, info: any) {
+    const isWallet = cont.info.name === "nwc-enclaved";
+    const oldInfo = cont.appInfo;
+
     cont.appInfo = info;
+
+    // wallet updated it's pubkey?
+    if (isWallet && oldInfo?.pubkey !== info.pubkey) {
+      if (!this.startedContainers) {
+        // now we can launch the containers
+        this.startContainers();
+      } else {
+        // FIXME invalidate all the nwcClients?
+      }
+    }
   }
 
-  private getAmountMsat(cont: Container, hours: number) {
-    return cont.info.units * SATS_PER_UNIT_PER_HOUR * hours * 1000;
+  private getAmountMsat(cont: Container, intervals: number = 1) {
+    return cont.info.units * SATS_PER_UNIT_PER_INTERVAL * intervals * 1000;
   }
 
-  private createNWCForKey(seckey: Uint8Array) {
+  private async onWalletTx(pubkey: string) {
+    if (pubkey === (await this.context.serviceSigner.getPublicKey())) return;
+    const cont = this.conts.get(pubkey);
+    if (!cont) return;
+    await this.updateBalance(cont);
+  }
+
+  private getNWCForKey(seckey: Uint8Array) {
+    const pubkey = getPublicKey(seckey);
+    const existingClient = this.nwcClients.get(pubkey);
+    if (existingClient) return existingClient;
+
     const wallet = [...this.conts.values()].find(
       (c) => c.info.name === "nwc-enclaved"
     );
@@ -229,94 +349,87 @@ export class AppServer extends EnclavedServer {
 
     const nostrWalletConnectUrl = `nostr+walletconnect://${
       wallet.appInfo.pubkey
-    }?relay=wss%3A%2F%2Frelay.zap.land&secret=${bytesToHex(seckey)}`;
-    return fromNWC(nostrWalletConnectUrl);
+    }?relay=${encodeURIComponent(NWC_RELAY)}&secret=${bytesToHex(seckey)}`;
+    const client = fromNWC(nostrWalletConnectUrl, this.nwcRelay, () => {
+      this.onWalletTx(pubkey);
+    });
+    this.nwcClients.set(pubkey, client);
+    return client;
   }
 
-  private createParentNWC() {
-    return this.createNWCForKey(this.context.serviceSigner.unsafeGetSeckey());
+  private getParentNWC() {
+    return this.getNWCForKey(this.context.serviceSigner.unsafeGetSeckey());
   }
 
-  private createNWC(cont: Container) {
-    return this.createNWCForKey(cont.info.seckey);
+  private getNWC(cont: Container) {
+    return this.getNWCForKey(cont.info.seckey);
   }
 
-  private async createInvoice(cont: Container, hours: number = 1) {
-    const client = this.createNWC(cont);
-    const description = `Enclaved ${cont.info.units} units`;
-    const amount = this.getAmountMsat(cont, hours);
+  private async createInvoice(cont: Container, amount: number) {
+    const client = this.getNWC(cont);
+    const description = `Enclaved launch ${cont.info.docker}, ${cont.info.units} units`;
     const invoice = await client.makeInvoice({ amount, description });
-    client.dispose();
     return invoice;
   }
 
-  private async lookupInvoice(cont: Container) {
+  private async lookupLaunchInvoice(cont: Container) {
     if (!cont.info.paymentHash) throw new Error("No payment hash");
 
-    const client = this.createNWC(cont);
+    const client = this.getNWC(cont);
     const tx = await client.lookupInvoice({
       payment_hash: cont.info.paymentHash,
     });
-    client.dispose();
     return tx;
   }
 
-  private watchNewContPayment(cont: Container) {
-    // start watching the invoice
-    const to = setInterval(async () => {
+  private async checkWaitingPayment(cont: Container) {
+    try {
+      let invoice: NWCTransaction | undefined;
       try {
-        let invoice: NWCTransaction | undefined;
-        try {
-          invoice = await this.lookupInvoice(cont);
-        } catch (e) {
-          console.log("lookup invoice error", e, cont.info.paymentHash);
-          // WTF???
-          if (e === "NOT_FOUND") throw new Error("Invoice disappeared!");
-        }
-
-        // connection issues, just keep trying
-        if (!invoice) return;
-
-        // got the invoice
-        if (invoice.state === "settled") {
-          // all ok
-          clearInterval(to);
-          console.log("new container paid", cont.info.pubkey);
-
-          // 1 hour initially
-          cont.info.paidUntil = now() + 3600;
-          this.db.setContainerPaidUntil(cont.info.pubkey, cont.info.paidUntil);
-
-          // deploy
-          await this.deploy(cont);
-        } else if (invoice.expires_at! < now()) {
-          // expired
-          clearInterval(to);
-          console.log("new container expired", cont.info.pubkey);
-
-          // cleanup
-          this.conts.delete(cont.info.pubkey);
-          this.db.deleteContainer(cont.info.pubkey);
-        }
-      } catch (e) {
-        console.log(
-          "Failed to lookup invoice",
-          cont.info.pubkey,
-          cont.info.paymentHash
-        );
+        invoice = await this.lookupLaunchInvoice(cont);
+      } catch (e: any) {
+        console.log("lookup invoice error", e, cont.info.paymentHash);
+        // WTF???
+        if (e?.message === "NOT_FOUND") throw new Error("Invoice disappeared!");
       }
-    }, 3000);
+
+      // connection issues, just keep trying
+      if (!invoice) return;
+
+      // got the invoice
+      if (invoice.state === "settled") {
+        console.log("new container paid", cont.info.pubkey);
+        return true;
+      } else if (invoice.expires_at! < now()) {
+        console.log("new container expired", cont.info.pubkey);
+
+        // cleanup
+        this.conts.delete(cont.info.pubkey);
+        this.db.deleteContainer(cont.info.pubkey);
+      }
+    } catch (e) {
+      console.log(
+        "Failed to lookup invoice",
+        cont.info.pubkey,
+        cont.info.paymentHash
+      );
+    }
+
+    return false;
   }
 
-  private async createWallet(cont: Container) {
-    const client = this.createParentNWC();
-    await client.addPubkey({
-      pubkey: cont.info.pubkey,
-    });
-    client.dispose();
+  private async ensureWallet(cont: Container) {
+    try {
+      const parent = this.getParentNWC();
+      await parent.addPubkey({
+        pubkey: cont.info.pubkey,
+      });
+      this.getNWCForKey(cont.info.seckey);
+    } catch {}
   }
 
   protected async launch(req: Request, res: Reply) {
+    if (!this.startedContainers) throw new Error("Retry later");
     if (!req.params.docker) throw new Error("Specify docker url");
     if (!req.params.units || !parseInt(req.params.units))
       throw new Error("Specify units");
@@ -327,24 +440,31 @@ export class AppServer extends EnclavedServer {
     if (usedUnits + req.params.units > TOTAL_UNITS)
       throw new Error("Not enough free units");
 
-    const manifest = await fetchDockerImageInfo(req.params.docker);
+    const manifest = await fetchDockerImageInfo({
+      imageRef: req.params.docker,
+    });
     console.log("manifest of", req.params.docker, manifest);
     const imageSize = manifest.layers.reduce((a, l) => (a += l.size), 0);
-    if (imageSize > (req.params.units * DISK_PER_UNIT_MB) / 1)
+    console.log("image size", req.params.docker, imageSize);
+    if (imageSize > (req.params.units * DISK_PER_UNIT_MB * 1024 * 1024) / 2)
       throw new Error("Need more units for this image");
 
     // create key and container info
     const info = this.createContainerFromParams(req.params, false);
+    info.adminPubkey = req.pubkey;
     console.log("new container", req.params.name, info.pubkey, info.portsFrom);
 
     // add to RAM
     const cont = new Container(info, this.context);
 
     // create wallet first
-    await this.createWallet(cont);
+    await this.ensureWallet(cont);
+
+    // amount to prepay for first interval
+    const amount = this.getAmountMsat(cont);
 
     // create invoice
-    const invoice = await this.createInvoice(cont);
+    const invoice = await this.createInvoice(cont, amount);
     cont.info.paymentHash = invoice.payment_hash;
 
     // write to db, deployed=false
@@ -352,9 +472,6 @@ export class AppServer extends EnclavedServer {
 
     // add
     this.conts.set(cont.info.pubkey, cont);
-
-    // watch for the payment and deploy or cleanup
-    this.watchNewContPayment(cont);
 
     // set result
     res.result = {
@@ -364,9 +481,10 @@ export class AppServer extends EnclavedServer {
   }
 
   public async shutdown() {
+    this.off = true;
     for (const c of this.conts.values()) {
       console.log("shutdown", c.info.pubkey);
-      if (c.info.state === "deployed") await c.down();
+      if (c.info.state === "deployed") await c.shutdown();
     }
   }
 }

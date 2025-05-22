@@ -18,10 +18,11 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { DBContainer } from "./db";
 import { PrivateKeySigner } from "./signer";
 
-const DEFAULT_RELAYS = [
+export const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
   "wss://relay.primal.net",
   "wss://nostr.mom",
+  "wss://relay.enclaved.org",
 ];
 
 export const OUTBOX_RELAYS = [
@@ -272,7 +273,7 @@ export async function publishContainerInfo(params: {
       ["tee_root", JSON.stringify(params.root)],
       ["tee_cert", JSON.stringify(cert)],
       ["alt", "enclaved container"],
-      // ["someInfo", "" + info.someInfo],
+      ["state", params.info.state],
     ],
   };
   if (params.info.adminPubkey)
@@ -291,7 +292,6 @@ export async function publishContainerInfo(params: {
     DEFAULT_RELAYS
   );
 
-  // const npub = nip19.npubEncode(pubkey);
   const docker = params.info.docker ? `Docker: ${params.info.docker}` : "";
   const profile: UnsignedEvent = {
     pubkey,
@@ -303,7 +303,11 @@ export async function publishContainerInfo(params: {
       about: `
 This is a container running inside enclaved server.\n
 ${docker}\n
-Learn more at ${REPO}\n`,
+Learn more at ${REPO}\n
+State: ${params.info.state}\n
+Admin: ${params.info.adminPubkey || ""}\n
+Balance: ${Math.floor(params.info.balance / 1000)}\n
+`,
       picture: "",
     }),
     tags: [["t", "enclaved-container"]],

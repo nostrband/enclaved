@@ -6,6 +6,7 @@ import { verifyBuild, verifyInstance } from "../modules/aws";
 import { fetchOutboxRelays } from "../cli/utils";
 import { getIP } from "../modules/utils";
 import { WSServer, Rep, Req } from "../modules/ws-server";
+import { DEFAULT_RELAYS } from "../modules/nostr";
 
 // FIXME
 class ParentServer extends WSServer {
@@ -82,7 +83,7 @@ class ParentServer extends WSServer {
     if (instance) pubkeys.push(instance.pubkey);
     const relays = pubkeys.length
       ? await fetchOutboxRelays(pubkeys)
-      : ["wss://relay.damus.io", "wss://relay.primal.net"];
+      : DEFAULT_RELAYS;
     console.log("outbox relays", build?.pubkey, instance?.pubkey, relays);
 
     const prod = process.env.PROD === "true";
@@ -129,7 +130,7 @@ function startParentServer(port: number) {
 export function mainParent(argv: string[]) {
   if (!argv.length) throw new Error("Service not specified");
   if (argv[0] === "run") {
-    const parentPort = Number(argv?.[1]) || 1080;
+    const parentPort = Number(argv?.[1]) || 2080;
     startParentServer(parentPort);
   }
 }

@@ -2,7 +2,7 @@
   "builtin": [
     {
       "name": "nwc-enclaved",
-      "docker": "nostrband/nwc-enclaved@sha256:2ed53256f770a0f61475897d3c9370ecfb3a55176530a4332977888831916469",
+      "docker": "nostrband/nwc-enclaved@sha256:46d5e4bbac1ea5e0e0efc6ef779768afce36a64409c523d2554b38dba0276c48",
       "units": 20,
       "env": {
         "NWC_RELAYS": "wss://relay.zap.land",

@@ -13,11 +13,13 @@ export interface DBContainer {
   name: string;
   docker?: string;
   units: number;
-  paidUntil: number;
   isBuiltin: boolean;
   env?: any;
   state: ContainerState;
   paymentHash?: string;
+  uptimeCount: number;
+  uptimePaid: number;
+  balance: number;
 }
 
 export class DB {
@@ -25,7 +27,12 @@ export class DB {
 
   constructor(file: string) {
     this.db = new DatabaseSync(file);
-    this.db.exec(`
+    try {
+      this.db.exec(`
+      ALTER TABLE containers ADD COLUMN balance INTEGER DEFAULT 0
+      `);
+    } catch {
+      this.db.exec(`
       CREATE TABLE IF NOT EXISTS containers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         pubkey TEXT,
@@ -36,13 +43,16 @@ export class DB {
         name,
         docker TEXT DEFAULT '',
         units INTEGER DEFAULT 1,
-        paid_until INTEGER DEFAULT 0,
+        uptime_count INTEGER DEFAULT 0,
+        uptime_paid INTEGER DEFAULT 0,
         is_builtin INTEGER DEFAULT 0,
         env TEXT DEFAULT '',
         state TEXT,
-        payment_hash TEXT DEFAULT ''
+        payment_hash TEXT DEFAULT '',
+        balance INTEGER DEFAULT 0
       )
     `);
+    }
     this.db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS containers_pubkey_index 
       ON containers (pubkey)
@@ -72,7 +82,8 @@ export class DB {
       // @ts-ignore
       state: rec.state as string,
       isBuiltin: (rec.is_builtin || 0) > 0,
-      paidUntil: (rec.paid_until as number) || 0,
+      uptimeCount: (rec.uptime_count as number) || 0,
+      uptimePaid: (rec.uptime_paid as number) || 0,
       portsFrom: rec.ports_from as number,
       pubkey: rec.pubkey as string,
       token: rec.token as string,
@@ -82,6 +93,7 @@ export class DB {
       env: rec.env ? JSON.parse(rec.env) : undefined,
       name: rec.name as string,
       paymentHash: rec.payment_hash as string,
+      balance: rec.balance as number,
     };
   }
 
@@ -142,6 +154,14 @@ export class DB {
     if (!f.changes) throw new Error("Failed to upsert container");
   }
 
+  public setContainerState(pubkey: string, state: string) {
+    const up = this.db.prepare(`
+      UPDATE containers SET state = ? WHERE pubkey = ?
+    `);
+    const r = up.run(state, pubkey);
+    if (!r.changes) throw new Error("Failed to set container state");
+  }
+
   public setContainerPaymentHash(pubkey: string, paymentHash: string) {
     const up = this.db.prepare(`
       UPDATE containers SET payment_hash = ? WHERE pubkey = ?
@@ -150,12 +170,28 @@ export class DB {
     if (!r.changes) throw new Error("Failed to set container payment_hash");
   }
 
-  public setContainerPaidUntil(pubkey: string, paidUntil: number) {
+  public setContainerUptimePaid(pubkey: string, uptimePaid: number) {
     const up = this.db.prepare(`
-      UPDATE containers SET paid_until = ? WHERE pubkey = ?
+      UPDATE containers SET uptime_paid = ? WHERE pubkey = ?
     `);
-    const r = up.run(paidUntil, pubkey);
-    if (!r.changes) throw new Error("Failed to set container paid_until");
+    const r = up.run(uptimePaid, pubkey);
+    if (!r.changes) throw new Error("Failed to set container uptime_paid");
+  }
+
+  public setContainerUptimeCount(pubkey: string, uptimeCount: number) {
+    const up = this.db.prepare(`
+      UPDATE containers SET uptime_count = ? WHERE pubkey = ?
+    `);
+    const r = up.run(uptimeCount, pubkey);
+    if (!r.changes) throw new Error("Failed to set container uptime_paid");
+  }
+
+  public setContainerBalance(pubkey: string, balance: number) {
+    const up = this.db.prepare(`
+      UPDATE containers SET balance = ? WHERE pubkey = ?
+    `);
+    const r = up.run(balance, pubkey);
+    if (!r.changes) throw new Error("Failed to set container balance");
   }
 
   public deleteContainer(pubkey: string) {
@@ -164,14 +200,6 @@ export class DB {
     `);
     const r = del.run(pubkey);
     if (!r.changes) throw new Error("Failed to delete container");
-  }
-
-  public getMaxPortsFrom() {
-    const select = this.db.prepare(`
-      SELECT MAX(ports_from) as pf FROM containers
-    `);
-    const rec = select.get();
-    return (rec?.ports_from as number) || 0;
   }
 
   public listContainers() {

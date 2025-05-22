@@ -7,6 +7,7 @@ set -e
 sudo dnf install aws-nitro-enclaves-cli -y
 sudo dnf install aws-nitro-enclaves-cli-devel -y
 sudo dnf install socat -y
+sudo dnf install docker docker-compose-plugin -y
 sudo usermod -aG ne ec2-user
 sudo usermod -aG docker ec2-user
 

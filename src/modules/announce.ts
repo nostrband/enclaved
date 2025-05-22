@@ -1,16 +1,13 @@
-import { Event, UnsignedEvent, nip19 } from "nostr-tools";
-import { nsmGetAttestation, nsmGetAttestationInfo, nsmParseAttestation } from "./nsm";
-import { ANNOUNCEMENT_INTERVAL, KIND_INSTANCE, REPO } from "./consts";
-import { now } from "./utils";
+import { Event } from "nostr-tools";
+import { nsmGetAttestationInfo } from "./nsm";
+import { ANNOUNCEMENT_INTERVAL } from "./consts";
 import { Signer } from "./types";
 import {
-  OUTBOX_RELAYS,
   prepareRootCertificate,
   publishInstance,
   publishInstanceProfile,
   publishNip65Relays,
   publishStats,
-  signPublish,
 } from "./nostr";
 
 export interface AnnounceParams {
@@ -41,7 +38,11 @@ async function announce(p: AnnounceParams) {
   await publishInstance(p, attestation, root);
 
   // kind 0
-  await publishInstanceProfile(p.signer, attestation.env, p.instanceAnnounceRelays);
+  await publishInstanceProfile(
+    p.signer,
+    attestation.env,
+    p.instanceAnnounceRelays
+  );
 
   // kind 1
   if (p.getStats)

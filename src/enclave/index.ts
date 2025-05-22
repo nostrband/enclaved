@@ -10,6 +10,7 @@ import fs from "node:fs";
 import { bytesToHex } from "@noble/hashes/utils";
 import { AppServer } from "./app-server";
 import { ContainerServer } from "./container-server";
+import { ContainerContext } from "./container";
 
 function getSecretKey(dir: string) {
   const FILE = dir + "/.service.sk";
@@ -80,22 +81,27 @@ export async function startEnclave(opts: {
 
   // server
   const contPort = opts.parentPort + 1;
-  const ip = getIP("tun0");
+  const device = process.env["ENCLAVED_NETWORK_DEVICE"] || "tun0";
+  const ip = getIP(device);
+  if (!ip) throw new Error("No IP on device " + device);
 
-  server = new AppServer(
-    {
-      dir: opts.dir,
-      prod: !!prod,
-      serviceSigner,
-      contEndpoint: `ws://${ip}:${contPort}`,
-      relays: [opts.relayUrl],
-    },
-    conf
-  );
-  await server.start();
+  const context: ContainerContext = {
+    dir: opts.dir,
+    prod: !!prod,
+    serviceSigner,
+    contEndpoint: `ws://${ip}:${contPort}`,
+    relays: [opts.relayUrl],
+    instanceAnnounceRelays,
+  };
+
+  // init the server
+  server = new AppServer(context, conf);
 
   // handle requests from containers
   new ContainerServer(contPort, server);
+
+  // start
+  await server.start();
 
   // request handler
   const handler = async (e: Event, relay: Relay) => {
@@ -144,7 +150,7 @@ export function mainEnclave(argv: string[]) {
   switch (argv[0]) {
     case "run":
       const parentPort = Number(argv?.[1]) || 2080;
-      const relayUrl = argv?.[2] || "wss://relay.damus.io";
+      const relayUrl = argv?.[2] || "wss://relay.enclaved.org";
       const dir = argv?.[3] || "/enclaved_data";
       startEnclave({ parentPort, relayUrl, dir });
       break;
