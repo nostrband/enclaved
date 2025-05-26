@@ -8,6 +8,7 @@ import {
   prepareContainerCert,
   prepareRootCertificate,
 } from "../modules/nostr";
+import { CHARGE_INTERVAL, SATS_PER_UNIT_PER_INTERVAL } from "../modules/consts";
 
 export class ContainerServer extends WSServer {
   private server: AppServer;
@@ -72,11 +73,36 @@ export class ContainerServer extends WSServer {
     };
   }
 
+  private async getContainerInfo(
+    req: Req,
+    rep: Rep,
+    headers?: IncomingHttpHeaders
+  ) {
+    const cont = this.getContainer(headers);
+    if (!cont) throw new Error("Invalid token");
+
+    rep.result = {
+      ok: true,
+      container: {
+        pubkey: cont.info.pubkey,
+        balance: cont.info.balance,
+        uptimeCount: cont.info.uptimeCount,
+        uptimePaid: cont.info.uptimePaid,
+        units: cont.info.units,
+        price: cont.info.units * SATS_PER_UNIT_PER_INTERVAL * 1000,
+        interval: CHARGE_INTERVAL,
+        walletPubkey: cont.walletPubkey,
+      },
+    };
+  }
+
   protected async handle(req: Req, rep: Rep, headers?: IncomingHttpHeaders) {
     if (req.method === "create_certificate") {
       await this.createCertificate(req, rep, headers);
     } else if (req.method === "set_info") {
       await this.setInfo(req, rep, headers);
+    } else if (req.method === "get_container_info") {
+      await this.getContainerInfo(req, rep, headers);
     }
   }
 }

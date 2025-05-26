@@ -296,6 +296,9 @@ export async function publishContainerInfo(params: {
   );
 
   const docker = params.info.docker ? `Docker: ${params.info.docker}\n` : "";
+  const enclaved = `Enclaved instance: nostr:${nip19.npubEncode(
+    await params.serviceSigner.getPublicKey()
+  )}\n`;
   const app = params.appPubkey
     ? `App instance: nostr:${nip19.npubEncode(params.appPubkey)}\n`
     : "";
@@ -308,6 +311,7 @@ export async function publishContainerInfo(params: {
 This is a container running inside enclaved server.\n
 Learn more at ${REPO}\n
 ${docker}
+${enclaved}
 ${app}
 ${admin}
 State: ${params.info.state}\n

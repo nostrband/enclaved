@@ -39,7 +39,6 @@ export const CONF_FILE = "enclaved.json";
 export const TOTAL_UNITS = 100;
 export const SATS_PER_UNIT_PER_INTERVAL = 5;
 export const DISK_PER_UNIT_MB = 50;
-// FIXME DEBUG
-export const CHARGE_INTERVAL = 30; // 1h
+export const CHARGE_INTERVAL = 3600; // 1h
 
 export const NWC_RELAY = "wss://relay.zap.land";

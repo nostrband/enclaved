@@ -67,21 +67,25 @@ export class AppServer extends EnclavedServer {
       if (info.isBuiltin) continue;
 
       // add it
-      console.log("existing container", info.pubkey, info.portsFrom);
+      console.log("existing container", info.pubkey, info.portsFrom, info.state);
       const cont = new Container(info, this.context);
       this.conts.set(cont.info.pubkey, cont);
 
       // make sure NWC client is created and starts watching notifications
       await this.ensureWallet(cont);
+      console.log("container got wallet");
 
       // make sure balances are up to date,
       // from now on we'll be subscribed to balance
       // events and will keep it updated
       await this.updateBalance(cont);
+      console.log("container got balance");
 
       // launch deployed container etc
       await cont.changeState(cont.info.state);
+      console.log("container done");
     }
+    console.log("startContainers done");
 
     // start charge monitor
     await this.chargeMonitor();
@@ -320,6 +324,25 @@ export class AppServer extends EnclavedServer {
       } else {
         // FIXME invalidate all the nwcClients?
       }
+    }
+  }
+
+  public async getBalance() {
+    const wallet = [...this.conts.values()].find(
+      (w) => w.info.name === "nwc-enclaved"
+    );
+    if (!wallet || !wallet.getAppInfo()?.pubkey) return undefined;
+    const client = new NWCClient({
+      relayUrl: "wss://relay.zap.land",
+      privkey: this.context.serviceSigner.unsafeGetSeckey(),
+      walletPubkey: wallet.getAppInfo().pubkey,
+    });
+    try {
+      client.start();
+      const { balance } = await client.getBalance();
+      return balance;
+    } finally {
+      client.dispose();
     }
   }
 

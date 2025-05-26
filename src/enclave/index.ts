@@ -128,7 +128,10 @@ export async function startEnclave(opts: {
   const getStats = async () => {
     const stats = new Map<string, string>();
     stats.set("containers", "" + server!.containerCount());
-    // stats.set("reqs", ""+reqsTotal);
+    const balance = await server.getBalance();
+    console.log("service balance", balance);
+    if (balance) stats.set("balance", "" + balance);
+
     return stats;
   };
 
