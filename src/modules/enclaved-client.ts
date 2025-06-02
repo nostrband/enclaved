@@ -50,22 +50,4 @@ export class EnclavedClient extends Client {
       );
     }
   }
-
-  async getPublicKey(): Promise<string> {
-    if (this.userPubkey) return this.userPubkey;
-
-    const pk = await this.send({
-      method: "get_public_key",
-      params: [],
-    });
-    if (pk.length !== 64) throw new Error("Invalid pubkey");
-    this.userPubkey = pk;
-    return pk;
-  }
-  async nip04Decrypt(pubkey: string, data: string): Promise<string> {
-    return await this.send({
-      method: "nip44_decrypt",
-      params: [pubkey, data],
-    });
-  }
 }

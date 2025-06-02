@@ -1,15 +1,22 @@
 {
-	"compilerOptions": {
-		"esModuleInterop": true,
-		"target": "ES6",
-		"module": "ESNext",
-		"moduleResolution": "node",
-		"strict": true,
-		"skipLibCheck": true,
-		"outDir": "dist"
-	},
-	"ts-node": {
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "esModuleInterop": true,
+    "strict": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "sourceMap": true,
+    "declaration": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "ts-node": {
     "esm": true
   },
-	"include": ["src"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }

@@ -39,11 +39,45 @@ ip link set lo up
 PWD=`head /dev/urandom | tr -dc 'A-Za-z0-9' | head -c 12`
 sed -i "s/{PASSWORD}/${PWD}/g" supervisord.conf
 
-# check
+# check the conf in enclave
 cat supervisord.conf
+
+# =========================
+# Recover data
+
+# start supervisord for recovery
+./supervisord -c supervisord.conf &
+SUPERVISOR_PID=$!
+
+sleep 1
+
+./supervisord-ctl.sh status
+
+# start proxy to parent, otherwise we can't get IP to setup the network
+./supervisord-ctl.sh start socat-parent
+
+# setup network (after we started socat and asked parent for our IP)
+./enclave-network-setup.sh
+
+# start proxies
+./supervisord-ctl.sh start ip-to-vsock-raw-outgoing
+./supervisord-ctl.sh start vsock-to-ip-raw-incoming
+./supervisord-ctl.sh start dnsproxy
+
+# wait for them to start
+sleep 1
 
 # copy data from parent
 ./enclave-recover.sh
+
+# setup disk
+./enclave-disk-setup.sh 
+
+# done recover
+wait $SUPERVISOR_PID
+
+# ========================
+# MAIN: launch supervisord
 
 # Run supervisor first, no programs should be running yet
 ./supervisord -c supervisord.conf &
@@ -52,16 +86,8 @@ sleep 1
 echo "status"
 ./supervisord-ctl.sh status
 
-# start proxy to parent
-./supervisord-ctl.sh start socat-parent
-
-# setup disk
-./enclave-disk-setup.sh 
-
-# setup network (after we started socat and asked parent for our IP)
-./enclave-network-setup.sh
-
 # start proxies
+./supervisord-ctl.sh start socat-parent
 ./supervisord-ctl.sh start ip-to-vsock-raw-outgoing
 ./supervisord-ctl.sh start vsock-to-ip-raw-incoming
 
@@ -219,8 +245,10 @@ curl -v https://google.com
 
 echo "all started"
 wait $SUPERVISOR_PID
-
 echo "shutdown"
+
+# EOF MAIN
+# ==========================
 
 # copy data to parent
 ./enclave-backup.sh

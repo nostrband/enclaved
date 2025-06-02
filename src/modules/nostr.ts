@@ -1,8 +1,9 @@
 import fs from "node:fs";
-import { Event, UnsignedEvent, nip19 } from "nostr-tools";
+import { Event, Filter, UnsignedEvent, nip19 } from "nostr-tools";
 import { AttestationInfo, Signer } from "./types";
 import {
   CERT_TTL,
+  ENCLAVED_RELAY,
   KIND_ENCLAVED_CERTIFICATE,
   KIND_ENCLAVED_PROCESS,
   KIND_INSTANCE,
@@ -14,7 +15,7 @@ import {
 import { now } from "./utils";
 import { Relay } from "./relay";
 import { AnnounceParams } from "./announce";
-import { bytesToHex } from "@noble/hashes/utils";
+import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import { DBContainer } from "./db";
 import { PrivateKeySigner } from "./signer";
 
@@ -22,7 +23,7 @@ export const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
   "wss://relay.primal.net",
   "wss://nostr.mom",
-  "wss://relay.enclaved.org",
+  ENCLAVED_RELAY,
 ];
 
 export const OUTBOX_RELAYS = [

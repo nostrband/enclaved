@@ -4,13 +4,14 @@ import { ParentClient } from "../modules/parent-client";
 import { Relay } from "../modules/relay";
 import { generateSecretKey, getPublicKey, Event } from "nostr-tools";
 import { PrivateKeySigner } from "../modules/signer";
-import { CONF_FILE } from "../modules/consts";
+import { CONF_FILE, ENCLAVED_RELAY } from "../modules/consts";
 import { exec, getIP } from "../modules/utils";
 import fs from "node:fs";
 import { bytesToHex } from "@noble/hashes/utils";
 import { AppServer } from "./app-server";
 import { ContainerServer } from "./container-server";
 import { ContainerContext } from "./container";
+import { startKeycrux } from "../modules/keycrux-client";
 
 function getSecretKey(dir: string) {
   const FILE = dir + "/.service.sk";
@@ -74,7 +75,7 @@ export async function startEnclave(opts: {
   const servicePrivkey = getSecretKey(opts.dir);
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
   const servicePubkey = getPublicKey(servicePrivkey);
-  console.log("adminPubkey", servicePubkey);
+  console.log("servicePubkey", servicePubkey);
 
   // was shutdown while we were starting?
   if (shutdown) return;
@@ -145,6 +146,9 @@ export async function startEnclave(opts: {
     prod,
     getStats,
   });
+
+  // periodically save our key to keycrux
+  startKeycrux();
 }
 
 // main
@@ -153,7 +157,7 @@ export function mainEnclave(argv: string[]) {
   switch (argv[0]) {
     case "run":
       const parentPort = Number(argv?.[1]) || 2080;
-      const relayUrl = argv?.[2] || "wss://relay.enclaved.org";
+      const relayUrl = argv?.[2] || ENCLAVED_RELAY;
       const dir = argv?.[3] || "/enclaved_data";
       startEnclave({ parentPort, relayUrl, dir });
       break;

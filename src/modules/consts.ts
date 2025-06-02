@@ -26,6 +26,7 @@ export const KIND_DOCKER_DIFF = 63800;
 
 // created 29.04.25
 export const KIND_ENCLAVED_RPC = 29425;
+export const KIND_KEYCRUX_RPC = 29525;
 
 export const REPO = "https://github.com/nostrband/enclaved";
 export const ANNOUNCEMENT_INTERVAL = 3600000; // 1h
@@ -42,3 +43,10 @@ export const DISK_PER_UNIT_MB = 50;
 export const CHARGE_INTERVAL = 3600; // 1h
 
 export const NWC_RELAY = "wss://relay.zap.land";
+export const ENCLAVED_RELAY = "wss://relay.enclaved.org";
+export const SEARCH_RELAY = "wss://relay.nostr.band/all";
+
+export const KEYCRUX_REPO = "https://github.com/nostrband/keycrux";
+export const KEYCRUX_PCR0 = "0b1ac29d3a024a3a7e07086a70ac11069b52875598016a2734d5a051389cfb8cc61d986bb18fabacecbd15dcc5f8b130";
+export const KEYCRUX_PCR1 = "4b4d5b3661b3efc12920900c80e126e4ce783c522de6c02a2a5bf7af3a2b9327b86776f188e4be1c1c404a129dbda493";
+export const KEYCRUX_PCR2 = "440ba8bf0b82a1ec52d6baf170dced95207651fae467f5e9eee9f69901949f22b2bd1f9ca3def5e8f6d2dbe0d2d609b1";

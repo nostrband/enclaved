@@ -13,7 +13,6 @@ export class Client {
   protected signerPubkey?: string;
 
   protected privkey?: Uint8Array;
-  private done = new Set<string>();
   private pending = new Map<
     string,
     {
@@ -43,6 +42,10 @@ export class Client {
     return this.relay;
   }
 
+  public getPublicKey() {
+    return getPublicKey(this.privkey!);
+  }
+
   public async send({
     method,
     params,
@@ -59,6 +62,7 @@ export class Client {
       method,
       params,
     };
+    console.log("request", req);
 
     const event = finalizeEvent(
       {

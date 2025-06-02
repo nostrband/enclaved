@@ -64,8 +64,6 @@ COPY ./supervisord-ctl.sh .
 #COPY ./busybox.tar .
 #COPY ./compose.yaml .
 #COPY ./nwc-enclaved.tar .
-# FIXME TESTING
-COPY ./age.key .
 
 # enclaved app
 # Copy only package-related files first

@@ -6,6 +6,8 @@ import {
   REPO,
   KIND_BUILD_SIGNATURE,
   KIND_INSTANCE_SIGNATURE,
+  ENCLAVED_RELAY,
+  SEARCH_RELAY,
 } from "../modules/consts";
 import {
   generateSecretKey,
@@ -23,6 +25,8 @@ import { pcrDigest } from "../modules/aws";
 import { EnclavedClient } from "../modules/enclaved-client";
 import { ParentClient } from "../modules/parent-client";
 import { fetchDockerImageInfo } from "../modules/manifest";
+import { fetchKeycruxServices, KeycruxClient, uploadKeycrux } from "../modules/keycrux-client";
+import { nsmInit } from "../modules/nsm";
 
 async function readLine() {
   const rl = readline.createInterface({
@@ -279,7 +283,52 @@ async function ensureInstanceSignature(dir: string) {
   fs.writeFileSync(dir + "/instance.json", JSON.stringify(rawEvent(event)));
 }
 
-async function verifyBuild() {}
+async function getKey(relayUrl: string) {
+  nsmInit()
+
+  const services = await fetchKeycruxServices(relayUrl);
+  if (!services.length) throw new Error("No valid keystores found");
+
+  const promises = services.map(async (s) => {
+    const relayUrl =
+      s.tags.find((t) => t.length > 1 && t[0] === "relay")?.[1] ||
+      ENCLAVED_RELAY;
+    const client = new KeycruxClient({
+      relayUrl,
+      keycruxPubkey: s.pubkey,
+    });
+    await client.start();
+    return client.get();
+  });
+  const results = await Promise.allSettled(promises);
+  const datas = results
+    .filter((r) => r.status === "fulfilled")
+    .map((r) => r.value);
+  if (!datas.length) {
+    console.error("No keys in keystores");
+    return;
+  }
+  console.log("datas", datas);
+
+  for (const data of datas) {
+    try {
+      if (typeof data !== "string" || !data.startsWith("AGE-SECRET-KEY-"))
+        throw new Error("Invalid data");
+
+      console.log(data);
+      return;
+    } catch (e) {
+      console.error("Invalid data", e, data);
+    }
+  }
+}
+
+async function setKey(relayUrl: string) {
+  nsmInit()
+
+  const count = await uploadKeycrux(relayUrl);
+  console.log("uploaded to keycrux services:", count);
+}
 
 async function dockerInspect(dockerUrl: string) {
   const manifest = await fetchDockerImageInfo({ imageRef: dockerUrl });
@@ -295,6 +344,14 @@ export function mainCli(argv: string[]) {
       const ip = getIP();
       console.log("ip", ip);
       return Promise.resolve();
+    }
+    case "get_key": {
+      const relayUrl = argv?.[1] || SEARCH_RELAY;
+      return getKey(relayUrl);
+    }
+    case "set_key": {
+      const relayUrl = argv?.[1] || SEARCH_RELAY;
+      return setKey(relayUrl);
     }
     case "parent_get_ip": {
       const port = Number(argv[1]) || 2080;
