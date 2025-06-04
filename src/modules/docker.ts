@@ -5,7 +5,7 @@ import { DBContainer } from "./db";
 import { ContainerContext } from "../enclave/container";
 import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
-import { DISK_PER_UNIT_MB } from "./consts";
+import { DISK_PER_UNIT_MB, VOLUME_PER_UNIT_MB } from "./consts";
 
 
 export interface LaunchRequest {
@@ -101,7 +101,7 @@ export async function up(cont: DBContainer, context: ContainerContext) {
     for (const path of volumes) {
       if (!path.trim()) continue;
 
-      const size = Math.floor((cont.units * DISK_PER_UNIT_MB) / volumes.length);
+      const size = Math.floor((cont.units * VOLUME_PER_UNIT_MB) / volumes.length);
 
       // naming: pubkey_hash(path)
       const name =

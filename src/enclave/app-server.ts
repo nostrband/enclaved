@@ -479,7 +479,9 @@ export class AppServer extends EnclavedServer {
     console.log("manifest of", req.params.docker, manifest);
     const imageSize = manifest.layers.reduce((a, l) => (a += l.size), 0);
     console.log("image size", req.params.docker, imageSize);
-    if (imageSize > (req.params.units * DISK_PER_UNIT_MB * 1024 * 1024) / 2)
+
+    // image > 80% of disk space?
+    if (imageSize > (req.params.units * DISK_PER_UNIT_MB * 1024 * 1024) * 0.8)
       throw new Error("Need more units for this image");
 
     // create key and container info

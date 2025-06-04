@@ -17,6 +17,7 @@ echo ${NPUB} > ${DIR}/npub.txt
 
 # copy info from build
 cp ${BUILD}${BUILD_SIG} ${DIR}${BUILD_SIG}
+cp -R ${BUILD}release ${DIR}
 
 # ensure instance signature
 ./node_modules/.bin/tsx src/index.ts cli ensure_instance_signature ${DIR}

@@ -1,24 +1,22 @@
-# Enclaved - app server for TEE
+# Enclaved: application server for TEE
 
-`enclaved` allows you to deploy docker images on [AWS Nitro Enclaves](https://aws.amazon.com/ec2/nitro/nitro-enclaves/), with ability to discover the running containers on Nostr and pay for them with Bitcoin over Lightning Network.
+`enclaved` (*Enclave Daemon*) - allows you to deploy docker images on [AWS Nitro Enclaves](https://aws.amazon.com/ec2/nitro/nitro-enclaves/), with ability to discover the running containers on Nostr and pay for them with Bitcoin over Lightning Network.
 
-AWS Nitro Enclave is a trusted execution environment (TEE) that allows clients to cryptographically verify various claims about the code running on the server, which might improve privacy and security guarantees (if used the right way).
+AWS Nitro Enclave is a trusted execution environment (TEE) that allows clients to cryptographically verify the code running on the server, which improves privacy and security guarantees.
 
 ## Why TEE?
 
 Modern servers are **black boxes**, violating your privacy, selling your data or getting hacked. 
 
-Many people choose to self-host important services, but that's complex and expensive.
-
-Running services on mobile devices is in turn unreliable and quite restrictive.
+Many people choose to self-host important services, but that's complex and expensive. Running services on mobile devices is unreliable and quite restrictive. Use of transparent "smart contracts" is only applicable to a narrow range of problems.
 
 TEEs might come as a solution. 
 
-Withing TEE any reproducible code is a **white box** - you know the hash of specific code image running in the TEE, and can verify it matches your expectations.
+Within TEE any reproducible code is a **white box** - you know the hash of specific code image running in the TEE, and can verify it matches your expectations.
 
-This might open doors to serious privacy and security improvements, especially with AI automation getting more and more adoption.
+This might open doors to serious privacy and security improvements.
 
-So we set out to build an application server to help deploy apps in TEE.
+So we set out to build an application server to make deploying apps in TEE as simple as running a docker container.
 
 We also love Bitcoin and Nostr, so we're making `enclaved` discoverable on Nostr, and payable with Bitcoin.
 
@@ -58,19 +56,21 @@ The approach recommended by AWS is to use AWS Key Management Service to store a 
 
 We are skeptical about the use of AWS KMS, so we'll *"build it ourselves"* (tm). Right now, when parent sends `shutdown` command, the enclave's `supervisord` is gracefully stopped, disk file is unmounted and then stream-encrypted with [`age`](https://github.com/FiloSottile/age) and sent back to parent with [`rclone`](https://rclone.org), `socat` and `vsock`. The data is saved in `./instance/data/`, and when the enclave is restarted, same data is read back from parent and decrypted by `age` and mounted back as disk. 
 
-NOTE: the custom key storage service isn't implemented yet, so all existing instances are not safe and should only be used for prototyping/debuging.
+To decrypt the data recovered on restart, we upload the encryption key into a key storage service. The key storage is [`keycrux`](https://github.com/nostrband/keycrux), it's a simple service running in it's own TEE. `enclaved` will upload it's disk key into `keycrux` and provide it's current attestation. When `enclaved` restarts, it asks `keycrux` for the keys and provides it's new attestation - if attestations are exactly the same (simple restart) then keys are returned, and `enclaved` can decrypt it's state. 
 
 ## Code updates
 
-The big question is: if clients rely on code hashes to verify the server, how can server be updated?
+If code is upgraded and attestation changes, how can previous `enclaved` state be recovered?
 
-It's ok when you control your own client and can update them both, but it's not ok when clients are third-parties. 
+If clients rely on specific code hashes to verify the server, how can server be updated? It's easy when you control your own client and can update them both, but it's not ok when clients are third-parties. 
 
-That's where Nostr and our custom key storage are gonna help. The plan is to have app maintainers publish `releases` with expected code hashes on Nostr, and let key storage apply policies like *only release keys to the updated enclave if new hashes are properly signed by maintainers*, etc. 
+That's where our custom key store (`keycrux`) will help. 
 
-Clients could then discover the updated PCR values and check on Nostr if this is an upgrade signed by maintainers and thus accept the new code hashes.
+To recover the state if `enclaved` is upgraded, an *update policy* is provided when disk key is uploaded to `keycrux`. Later on, when key is requested, if newly provided attestation differs from the one provided when key was stored, `keycrux` verifies the new attestation against the policy. Currently, the policy is roughly "the new build is signed by the same pubkeys", which means "if maintainers decided to upgrade the code, then it's ok to release the keys". 
 
-The details TBD, if you want to help build this out - send your ideas.
+For clients, instead of relying on specific [PCR values](https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where), we're proposing a similar approach: rely on a set of maintainers signing new code releases. When client discovers a service with unknown PCR values, it should check the set of `release signatures` - if those are made by the expected set of maintainers, then it is assumed that the service is valid.
+
+FIXME link to NIP-style proposals for all these Nostr events.
 
 ## Exposing open ports
 

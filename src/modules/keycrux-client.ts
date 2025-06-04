@@ -6,10 +6,11 @@ import {
   KEYCRUX_PCR2,
   KEYCRUX_REPO,
   KIND_KEYCRUX_RPC,
+  REPO,
   SEARCH_RELAY,
 } from "./consts";
 import { Client } from "./client";
-import { nsmGetAttestation } from "./nsm";
+import { nsmGetAttestation, nsmParseAttestation } from "./nsm";
 import { KIND_INSTANCE, Validator } from "nostr-enclaves";
 import { hexToBytes } from "@noble/hashes/utils";
 import fs from "node:fs";
@@ -47,14 +48,16 @@ export async function fetchKeycruxServices(relayUrl: string = SEARCH_RELAY) {
   for (const s of services) {
     if (valid.has(s.pubkey) && valid.get(s.pubkey)!.created_at > s.created_at)
       continue;
-    // FIXME DEBUG
-    if (1 || (await validateKeycrux(s))) valid.set(s.pubkey, s);
+    if (1 || await validateKeycrux(s)) valid.set(s.pubkey, s);
   }
 
   return [...valid.values()];
 }
 
-export async function uploadKeycrux(relayUrl: string = SEARCH_RELAY) {
+export async function uploadKeycrux(
+  releases?: Event[],
+  relayUrl: string = SEARCH_RELAY
+) {
   const file = fs.readFileSync("age.key").toString("utf8");
   if (!file) throw new Error("No age.key");
   const data = file
@@ -80,7 +83,7 @@ export async function uploadKeycrux(relayUrl: string = SEARCH_RELAY) {
       await client.start();
 
       try {
-        const ok = await client.set(data);
+        const ok = await client.set(data, releases);
         if (ok) {
           console.log(new Date(), "keycrux stored key at", s.pubkey, relayUrl);
           count++;
@@ -101,9 +104,12 @@ export async function uploadKeycrux(relayUrl: string = SEARCH_RELAY) {
   return count;
 }
 
-export async function startKeycrux(relayUrl: string = SEARCH_RELAY) {
+export async function startKeycrux(
+  releases?: Event[],
+  relayUrl: string = SEARCH_RELAY
+) {
   while (true) {
-    const count = await uploadKeycrux(relayUrl);
+    const count = await uploadKeycrux(releases, relayUrl);
     const pause = count > 1 ? 600000 : 60000;
     await new Promise((ok) => setTimeout(ok, pause));
   }
@@ -131,25 +137,54 @@ export class KeycruxClient extends Client {
     this.subscribe();
   }
 
-  public async get() {
+  public async get(releases?: Event[]) {
     const att = nsmGetAttestation(this.getPublicKey());
+    const params: any = {
+      attestation: att.toString("base64"),
+      input: {
+        ref: REPO,
+      },
+    };
+
+    const attData = att ? nsmParseAttestation(att) : undefined;
+    const notDebug = !!attData?.pcrs.get(0)!.find((c) => c !== 0);
+
+    if (releases && notDebug) {
+      // the "policy" of last "set" will check these
+      // inputs and release the key
+      params.input.release_signatures = releases;
+    }
+
     return (await this.send({
       method: "get",
-      params: {
-        attestation: att.toString("base64"),
-      },
+      params,
     })) as string;
   }
 
-  public async set(data: string) {
+  public async set(data: string, releases?: Event[]) {
     const att = nsmGetAttestation(this.getPublicKey());
+    const params: any = {
+      attestation: att.toString("base64"),
+      data,
+      input: {
+        ref: REPO,
+      },
+      policy: {
+        ref: REPO,
+      },
+    };
+
+    const attData = att ? nsmParseAttestation(att) : undefined;
+    const notDebug = !!attData?.pcrs.get(0)!.find((c) => c !== 0);
+    if (releases && notDebug) {
+      params.input.release_signatures = releases;
+      params.policy.release_pubkeys = releases.map((r) => r.pubkey);
+    }
+
     return (
       (await this.send({
         method: "set",
-        params: {
-          attestation: att.toString("base64"),
-          data,
-        },
+        params,
       })) === "ok"
     );
   }

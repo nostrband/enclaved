@@ -67,7 +67,7 @@ export async function startEnclave(opts: {
   });
 
   // get meta info from parent
-  const { build, instance, instanceAnnounceRelays, prod } =
+  const { build, instance, releases, instanceAnnounceRelays, prod } =
     await parent.getMeta();
 
   console.log(new Date(), "enclaved opts", opts);
@@ -148,7 +148,7 @@ export async function startEnclave(opts: {
   });
 
   // periodically save our key to keycrux
-  startKeycrux();
+  startKeycrux(releases);
 }
 
 // main

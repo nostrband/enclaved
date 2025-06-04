@@ -1,8 +1,8 @@
 import { WebSocket } from "ws";
 import fs from "node:fs";
-import { validateEvent, verifyEvent } from "nostr-tools";
+import { validateEvent, verifyEvent, Event } from "nostr-tools";
 import { nsmParseAttestation } from "../modules/nsm";
-import { verifyBuild, verifyInstance } from "../modules/aws";
+import { verifyBuild, verifyInstance, verifyRelease } from "../modules/aws";
 import { fetchOutboxRelays } from "../cli/utils";
 import { getIP } from "../modules/utils";
 import { WSServer, Rep, Req } from "../modules/ws-server";
@@ -29,8 +29,9 @@ class ParentServer extends WSServer {
   }
 
   private read() {
-    let build = undefined;
-    let instance = undefined;
+    let build: Event | undefined;
+    let instance: Event | undefined;
+    let releases: Event[] = [];
     try {
       build = JSON.parse(
         fs.readFileSync(this.dir + "/build.json").toString("utf8")
@@ -45,8 +46,21 @@ class ParentServer extends WSServer {
     } catch (e) {
       console.log("No instance file", e);
     }
+    try {
+      const files = fs.readdirSync(this.dir + "/release/");
+      console.log("release files", files);
+      for (const file of files) {
+        const release = JSON.parse(
+          fs.readFileSync(this.dir + "/release/" + file).toString("utf8")
+        );
+        releases.push(release);
+      }
+    } catch (e) {
+      console.log("No release files", e);
+    }
     console.log("build", build);
     console.log("instance", instance);
+    console.log("releases", releases);
     if (build) {
       if (!validateEvent(build) || !verifyEvent(build))
         throw new Error("Invalid build.json");
@@ -55,8 +69,13 @@ class ParentServer extends WSServer {
       if (!validateEvent(instance) || !verifyEvent(instance))
         throw new Error("Invalid instance.json");
     }
+    if (releases) {
+      for (const release of releases)
+        if (!validateEvent(release) || !verifyEvent(release))
+          throw new Error("Invalid releases");
+    }
 
-    return { build, instance };
+    return { build, instance, releases };
   }
 
   protected onConnected(ws: WebSocket) {
@@ -70,12 +89,14 @@ class ParentServer extends WSServer {
 
     const attData = nsmParseAttestation(att);
 
-    const { build, instance } = this.read();
+    const { build, instance, releases } = this.read();
     // debug enclaves return zero PCR0
     const prodEnclave = !!attData.pcrs.get(0)!.find((c) => c !== 0);
     if (prodEnclave) {
-      verifyBuild(attData, build);
-      verifyInstance(attData, instance);
+      verifyBuild(attData, build!);
+      verifyInstance(attData, instance!);
+      for (const release of releases)
+        verifyRelease(attData, release);
     }
 
     const pubkeys = [];
@@ -90,6 +111,7 @@ class ParentServer extends WSServer {
     return {
       build: build,
       instance: instance,
+      releases,
       instanceAnnounceRelays: relays,
       prod,
     };

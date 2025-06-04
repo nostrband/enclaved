@@ -1,5 +1,5 @@
 import { bytesToHex } from "@noble/hashes/utils";
-import { verifyBuild, verifyInstance } from "./aws";
+import { verifyBuild, verifyInstance, verifyRelease } from "./aws";
 import { nsmGetAttestation, nsmParseAttestation } from "./nsm";
 import { InstanceInfo } from "./types";
 import { WSClient } from "./ws-client";
@@ -33,19 +33,21 @@ export class ParentClient extends WSClient {
     }
 
     const attData = nsmParseAttestation(att);
-    const { build, instance, instanceAnnounceRelays, prod } =
+    const { build, instance, releases, instanceAnnounceRelays, prod } =
       await this.call<InstanceInfo>("get_meta", [att.toString("base64")]);
 
     const notDebug = !!attData.pcrs.get(0)!.find((c) => c !== 0);
     if (notDebug) {
-      if (!build || !instance) throw new Error("Bad reply");
+      if (!build || !instance || !releases) throw new Error("Bad reply");
       if (process.env.DEBUG === "true")
         throw new Error("Non-debug instance with DEBUG=true");
       verifyBuild(attData, build);
       verifyInstance(attData, instance);
+      for (const release of releases) verifyRelease(attData, release);
     } else {
       if (process.env.DEBUG !== "true")
         throw new Error("Debug instance with DEBUG != true");
+
       if (
         instance &&
         instance.tags.find(
@@ -60,6 +62,6 @@ export class ParentClient extends WSClient {
       build,
       instance
     );
-    return { build, instance, instanceAnnounceRelays, prod };
+    return { build, instance, releases, instanceAnnounceRelays, prod };
   }
 }

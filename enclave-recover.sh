@@ -16,8 +16,8 @@ EOF
 
 if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
   # testing
-  #  ./node_modules/.bin/tsx src/index.ts cli set_key 
-  #  ./node_modules/.bin/tsx src/index.ts cli get_key 
+  # ./node_modules/.bin/tsx src/index.ts cli set_key 
+  # ./node_modules/.bin/tsx src/index.ts cli get_key 
 
   key=`./node_modules/.bin/tsx src/index.ts cli get_key | tail -n 1`
   echo "age.key from keycrux '$key'";
@@ -40,7 +40,7 @@ if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^d
 
 else
   echo "No disk file, starting from scratch"
-  ./age -o age.key
+  ./age-keygen -o age.key
 fi
 
 # shutdown

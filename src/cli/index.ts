@@ -8,6 +8,7 @@ import {
   KIND_INSTANCE_SIGNATURE,
   ENCLAVED_RELAY,
   SEARCH_RELAY,
+  KIND_RELEASE_SIGNATURE,
 } from "../modules/consts";
 import {
   generateSecretKey,
@@ -224,6 +225,40 @@ async function signBuild(dir: string) {
   fs.writeFileSync(dir + "/build.json", JSON.stringify(rawEvent(event)));
 }
 
+async function signRelease(dir: string) {
+  const prod = process.env.PROD === "true";
+
+  const pubkey = readPubkey(dir);
+  console.log("pubkey", pubkey);
+
+  const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
+  console.log("pcrs", pcrs);
+
+  const signer = await createSigner(pubkey);
+
+  const unsigned = {
+    created_at: now(),
+    kind: KIND_RELEASE_SIGNATURE,
+    content: "",
+    pubkey: await signer.getPublicKey(),
+    tags: [
+      ["t", prod ? "prod" : "dev"],
+      ["r", REPO],
+      ["PCR0", pcrs.Measurements["PCR0"]],
+      ["PCR1", pcrs.Measurements["PCR1"]],
+      ["PCR2", pcrs.Measurements["PCR2"]],
+    ],
+  };
+  console.log("signing", unsigned);
+  const event = await signer.signEvent(unsigned);
+  console.log("signed", event);
+
+  const path = dir + "/release";
+  fs.mkdirSync(path, { recursive: true });
+  const npub = nip19.npubEncode(pubkey);
+  fs.writeFileSync(`${path}/${npub}.json`, JSON.stringify(rawEvent(event)));
+}
+
 async function ensureInstanceSignature(dir: string) {
   const prod = process.env.PROD === "true";
 
@@ -283,8 +318,11 @@ async function ensureInstanceSignature(dir: string) {
   fs.writeFileSync(dir + "/instance.json", JSON.stringify(rawEvent(event)));
 }
 
-async function getKey(relayUrl: string) {
+async function getKey(relayUrl: string, port: number) {
   nsmInit()
+
+  const client = new ParentClient({ port });
+  const { releases } = await client.getMeta();
 
   const services = await fetchKeycruxServices(relayUrl);
   if (!services.length) throw new Error("No valid keystores found");
@@ -298,7 +336,7 @@ async function getKey(relayUrl: string) {
       keycruxPubkey: s.pubkey,
     });
     await client.start();
-    return client.get();
+    return client.get(releases);
   });
   const results = await Promise.allSettled(promises);
   const datas = results
@@ -323,10 +361,13 @@ async function getKey(relayUrl: string) {
   }
 }
 
-async function setKey(relayUrl: string) {
+async function setKey(relayUrl: string, port: number) {
   nsmInit()
 
-  const count = await uploadKeycrux(relayUrl);
+  const client = new ParentClient({ port });
+  const { releases } = await client.getMeta();
+
+  const count = await uploadKeycrux(releases, relayUrl);
   console.log("uploaded to keycrux services:", count);
 }
 
@@ -347,11 +388,13 @@ export function mainCli(argv: string[]) {
     }
     case "get_key": {
       const relayUrl = argv?.[1] || SEARCH_RELAY;
-      return getKey(relayUrl);
+      const port = Number(argv[2]) || 2080;
+      return getKey(relayUrl, port);
     }
     case "set_key": {
       const relayUrl = argv?.[1] || SEARCH_RELAY;
-      return setKey(relayUrl);
+      const port = Number(argv[1]) || 2080;
+      return setKey(relayUrl, port);
     }
     case "parent_get_ip": {
       const port = Number(argv[1]) || 2080;
@@ -360,6 +403,10 @@ export function mainCli(argv: string[]) {
     case "sign_build": {
       const dir = argv?.[1] || "./build/";
       return signBuild(dir);
+    }
+    case "sign_release": {
+      const dir = argv?.[1] || "./release/";
+      return signRelease(dir);
     }
     case "ensure_instance_signature": {
       const dir = argv?.[1] || "./instance/";

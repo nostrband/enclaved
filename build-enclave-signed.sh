@@ -55,3 +55,6 @@ rm ${BUILD}${KEY}
 # enclave so that enclave could report the $NPUB as builder
 # of this instance
 ./node_modules/.bin/tsx src/index.ts cli sign_build ${BUILD}
+
+# create release signature certifying the PCR0,1,2 values
+./node_modules/.bin/tsx src/index.ts cli sign_release ${BUILD}
