@@ -8,7 +8,6 @@ import { getIP } from "../modules/utils";
 import { WSServer, Rep, Req } from "../modules/ws-server";
 import { DEFAULT_RELAYS } from "../modules/nostr";
 
-// FIXME
 class ParentServer extends WSServer {
   private dir: string;
   private ws?: WebSocket;

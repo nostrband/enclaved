@@ -52,6 +52,7 @@ COPY ./build/vsock/vsock-to-ip-raw-incoming .
 
 # conf
 COPY ./enclaved.json .
+COPY ./release.json .
 
 # starter
 COPY ./enclave*.sh .

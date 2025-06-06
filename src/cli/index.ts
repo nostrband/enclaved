@@ -1,8 +1,7 @@
 import os from "node:os";
 import fs from "node:fs";
 import {
-  KIND_INSTANCE,
-  KIND_BUILD,
+  KIND_ANNOUNCEMENT,
   REPO,
   KIND_BUILD_SIGNATURE,
   KIND_INSTANCE_SIGNATURE,
@@ -19,14 +18,17 @@ import {
 import readline from "node:readline";
 import { Nip46Client } from "../modules/nip46-client";
 import { getIP, now } from "../modules/utils";
-import { fetchOutboxRelays, rawEvent } from "./utils";
-import { Relay } from "../modules/relay";
+import { rawEvent } from "./utils";
 import { Signer } from "../modules/types";
 import { pcrDigest } from "../modules/aws";
 import { EnclavedClient } from "../modules/enclaved-client";
 import { ParentClient } from "../modules/parent-client";
 import { fetchDockerImageInfo } from "../modules/manifest";
-import { fetchKeycruxServices, KeycruxClient, uploadKeycrux } from "../modules/keycrux-client";
+import {
+  fetchKeycruxServices,
+  KeycruxClient,
+  uploadKeycrux,
+} from "../modules/keycrux-client";
 import { nsmInit } from "../modules/nsm";
 
 async function readLine() {
@@ -81,13 +83,11 @@ async function parentGetIP({ port }: { port: number }) {
 }
 
 function readCert(dir: string) {
-  return fs
-    .readFileSync(dir + "/crt.pem")
-    .toString("utf8")
-    .split("\n")
-    .filter((s) => !s.startsWith("--"))
-    .join("")
-    .trim();
+  return fs.readFileSync(dir + "/crt.pem").toString("utf8");
+}
+
+function readPackageJson(): { version: string } {
+  return JSON.parse(fs.readFileSync("package.json").toString("utf8").trim());
 }
 
 function readPubkey(dir: string) {
@@ -106,7 +106,7 @@ async function createSigner(pubkey: string): Promise<Signer> {
   const client = new Nip46Client({
     relayUrl: "wss://relay.nsec.app",
     filename: os.homedir() + "/.enclaved-cli.json",
-    perms: `sign_event:${KIND_INSTANCE}`,
+    perms: `sign_event:${KIND_ANNOUNCEMENT}`,
   });
   await client.start();
   const authPubkey = await client.getPublicKey();
@@ -115,80 +115,80 @@ async function createSigner(pubkey: string): Promise<Signer> {
   return client;
 }
 
-export async function publishBuild({
-  dir,
-  prod_dev,
-  safe_unsafe,
-  comment,
-}: {
-  dir: string;
-  prod_dev: string;
-  safe_unsafe: string;
-  comment: string;
-}) {
-  if (prod_dev !== "dev" && prod_dev !== "prod")
-    throw new Error("Specify 'dev' or 'prod'");
-  if (safe_unsafe !== "safe" && safe_unsafe !== "unsafe")
-    throw new Error("Specify 'safe' or 'unsafe'");
+// export async function publishBuild({
+//   dir,
+//   prod_dev,
+//   safe_unsafe,
+//   comment,
+// }: {
+//   dir: string;
+//   prod_dev: string;
+//   safe_unsafe: string;
+//   comment: string;
+// }) {
+//   if (prod_dev !== "dev" && prod_dev !== "prod")
+//     throw new Error("Specify 'dev' or 'prod'");
+//   if (safe_unsafe !== "safe" && safe_unsafe !== "unsafe")
+//     throw new Error("Specify 'safe' or 'unsafe'");
 
-  const pubkey = readPubkey(dir);
-  console.log("pubkey", pubkey);
+//   const pubkey = readPubkey(dir);
+//   console.log("pubkey", pubkey);
 
-  const docker = JSON.parse(
-    fs.readFileSync(dir + "/docker.json").toString("utf8")
-  );
-  console.log("docker info", docker);
+//   const docker = JSON.parse(
+//     fs.readFileSync(dir + "/docker.json").toString("utf8")
+//   );
+//   console.log("docker info", docker);
 
-  const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
-  console.log("pcrs", pcrs);
+//   const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
+//   console.log("pcrs", pcrs);
 
-  const cert = readCert(dir);
-  console.log("cert", cert);
+//   const cert = readCert(dir);
+//   console.log("cert", cert);
 
-  const pkg = JSON.parse(fs.readFileSync("package.json").toString("utf8"));
-  console.log("pkg", pkg);
+//   const pkg = JSON.parse(fs.readFileSync("package.json").toString("utf8"));
+//   console.log("pkg", pkg);
 
-  console.log("signing in as", pubkey);
-  const signer = await createSigner(pubkey);
+//   console.log("signing in as", pubkey);
+//   const signer = await createSigner(pubkey);
 
-  const relays = await fetchOutboxRelays([pubkey]);
-  console.log("relays", relays);
+//   const relays = await fetchOutboxRelays([pubkey]);
+//   console.log("relays", relays);
 
-  const unsigned = {
-    created_at: now(),
-    kind: KIND_BUILD,
-    content: comment,
-    pubkey: await signer.getPublicKey(),
-    tags: [
-      ["r", REPO],
-      ["name", pkg.name],
-      ["v", pkg.version],
-      ["t", prod_dev],
-      ["t", safe_unsafe],
-      ["cert", cert],
-      ["x", docker["containerimage.config.digest"], "docker.config"],
-      ["x", docker["containerimage.digest"], "docker.manifest"],
-      ...[0, 1, 2, 8]
-        .map((id) => `PCR${id}`)
-        .map((pcr) => ["x", pcrs.Measurements[pcr], pcr]),
-    ],
-  };
-  // console.log("signing", unsigned);
-  const event = await signer.signEvent(unsigned);
-  console.log("signed", event);
+//   const unsigned = {
+//     created_at: now(),
+//     kind: KIND_BUILD,
+//     content: comment,
+//     pubkey: await signer.getPublicKey(),
+//     tags: [
+//       ["r", REPO],
+//       ["name", pkg.name],
+//       ["v", pkg.version],
+//       ["t", prod_dev],
+//       ["t", safe_unsafe],
+//       ["cert", cert],
+//       ["x", docker["containerimage.config.digest"], "docker.config"],
+//       ["x", docker["containerimage.digest"], "docker.manifest"],
+//       ...[0, 1, 2, 8]
+//         .map((id) => `PCR${id}`)
+//         .map((pcr) => ["x", pcrs.Measurements[pcr], pcr]),
+//     ],
+//   };
+//   // console.log("signing", unsigned);
+//   const event = await signer.signEvent(unsigned);
+//   console.log("signed", event);
 
-  const res = await Promise.allSettled(
-    relays.map((url) => {
-      const r = new Relay(url);
-      return r.publish(event).finally(() => r.dispose());
-    })
-  );
+//   const res = await Promise.allSettled(
+//     relays.map((url) => {
+//       const r = new Relay(url);
+//       return r.publish(event).finally(() => r.dispose());
+//     })
+//   );
 
-  console.log(
-    "published to",
-    res.filter((r) => r.status === "fulfilled").length
-  );
-}
+//   console.log(
+//     "published to",
+//     res.filter((r) => r.status === "fulfilled").length
+//   );
+// }
 
 async function signBuild(dir: string) {
   const prod = process.env.PROD === "true";
@@ -202,6 +202,9 @@ async function signBuild(dir: string) {
   const cert = readCert(dir);
   console.log("cert", cert);
 
+  const pkg = readPackageJson();
+  console.log("package.json", pkg);
+
   const signer = await createSigner(pubkey);
 
   // PCR8 is unique on every build (the way we do the build)
@@ -213,6 +216,8 @@ async function signBuild(dir: string) {
     pubkey: await signer.getPublicKey(),
     tags: [
       ["-"], // not for publishing
+      ["r", REPO],
+      ["v", pkg.version],
       ["t", prod ? "prod" : "dev"],
       ["cert", cert],
       ["PCR8", pcrs.Measurements["PCR8"]],
@@ -234,6 +239,9 @@ async function signRelease(dir: string) {
   const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
   console.log("pcrs", pcrs);
 
+  const pkg = readPackageJson();
+  console.log("package.json", pkg);
+
   const signer = await createSigner(pubkey);
 
   const unsigned = {
@@ -244,9 +252,10 @@ async function signRelease(dir: string) {
     tags: [
       ["t", prod ? "prod" : "dev"],
       ["r", REPO],
-      ["PCR0", pcrs.Measurements["PCR0"]],
-      ["PCR1", pcrs.Measurements["PCR1"]],
-      ["PCR2", pcrs.Measurements["PCR2"]],
+      ["v", pkg.version],
+      ["x", pcrs.Measurements["PCR0"], "PCR0"],
+      ["x", pcrs.Measurements["PCR1"], "PCR1"],
+      ["x", pcrs.Measurements["PCR2"], "PCR2"],
     ],
   };
   console.log("signing", unsigned);
@@ -319,7 +328,7 @@ async function ensureInstanceSignature(dir: string) {
 }
 
 async function getKey(relayUrl: string, port: number) {
-  nsmInit()
+  nsmInit();
 
   const client = new ParentClient({ port });
   const { releases } = await client.getMeta();
@@ -362,12 +371,12 @@ async function getKey(relayUrl: string, port: number) {
 }
 
 async function setKey(relayUrl: string, port: number) {
-  nsmInit()
+  nsmInit();
 
   const client = new ParentClient({ port });
-  const { releases } = await client.getMeta();
+  const { releases, releasePolicy } = await client.getMeta();
 
-  const count = await uploadKeycrux(releases, relayUrl);
+  const count = await uploadKeycrux(releasePolicy, releases, relayUrl);
   console.log("uploaded to keycrux services:", count);
 }
 
@@ -416,29 +425,29 @@ export function mainCli(argv: string[]) {
       const dockerUrl = argv[1];
       return dockerInspect(dockerUrl);
     }
-    case "publish_build": {
-      // docker config/manifest hashes taken from build/docker.json
-      // pcrs taken from build/pcrs.json
-      // crt.pem taken from build/crt.pem
-      // npub must be written to build/npub.txt
-      //
-      // need info:
-      // - prod/dev flag
-      // - safe/unsafe flag
-      // - comment
+    // case "publish_build": {
+    //   // docker config/manifest hashes taken from build/docker.json
+    //   // pcrs taken from build/pcrs.json
+    //   // crt.pem taken from build/crt.pem
+    //   // npub must be written to build/npub.txt
+    //   //
+    //   // need info:
+    //   // - prod/dev flag
+    //   // - safe/unsafe flag
+    //   // - comment
 
-      // FIXME make it adjustible
-      const dir = "./build/";
-      const prod_dev = argv[1];
-      const safe_unsafe = argv[2];
-      const comment = argv[3] || "";
-      return publishBuild({
-        dir,
-        prod_dev,
-        safe_unsafe,
-        comment,
-      });
-    }
+    //   // FIXME make it adjustible
+    //   const dir = "./build/";
+    //   const prod_dev = argv[1];
+    //   const safe_unsafe = argv[2];
+    //   const comment = argv[3] || "";
+    //   return publishBuild({
+    //     dir,
+    //     prod_dev,
+    //     safe_unsafe,
+    //     comment,
+    //   });
+    // }
     default: {
       throw new Error("Unknown command");
     }

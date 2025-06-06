@@ -1,12 +1,12 @@
 import fs from "node:fs";
-import { Event, Filter, UnsignedEvent, nip19 } from "nostr-tools";
+import { Event, UnsignedEvent, nip19 } from "nostr-tools";
 import { AttestationInfo, Signer } from "./types";
 import {
   CERT_TTL,
   ENCLAVED_RELAY,
   KIND_ENCLAVED_CERTIFICATE,
   KIND_ENCLAVED_PROCESS,
-  KIND_INSTANCE,
+  KIND_ANNOUNCEMENT,
   KIND_PROFILE,
   KIND_RELAYS,
   KIND_ROOT_CERTIFICATE,
@@ -15,9 +15,11 @@ import {
 import { now } from "./utils";
 import { Relay } from "./relay";
 import { AnnounceParams } from "./announce";
-import { bytesToHex, randomBytes } from "@noble/hashes/utils";
+import { bytesToHex } from "@noble/hashes/utils";
 import { DBContainer } from "./db";
 import { PrivateKeySigner } from "./signer";
+import { X509Certificate } from "node:crypto";
+import { tv } from "nostr-enclaves";
 
 export const DEFAULT_RELAYS = [
   "wss://relay.damus.io",
@@ -71,6 +73,8 @@ export async function prepareRootCertificate(
   info: AttestationInfo,
   signer: Signer
 ) {
+  const cert = new X509Certificate(info.info!.certificate);
+  const expiration = Math.floor(cert.validToDate.getTime() / 1000);
   const servicePubkey = await signer.getPublicKey();
   const tmpl: UnsignedEvent = {
     pubkey: servicePubkey,
@@ -78,8 +82,9 @@ export async function prepareRootCertificate(
     created_at: now(),
     content: info.base64,
     tags: [
+      ["-"],
       ["t", info.env],
-      ["expiration", "" + (now() + CERT_TTL)],
+      ["expiration", "" + expiration],
       ["alt", "attestation certificate by AWS Nitro Enclave"],
     ],
   };
@@ -97,6 +102,7 @@ export async function publishInstance(
     open,
     build,
     instance,
+    releases,
     inboxRelayUrl,
     instanceAnnounceRelays,
   } = p;
@@ -108,9 +114,9 @@ export async function publishInstance(
 
   const ins: UnsignedEvent = {
     pubkey,
-    kind: KIND_INSTANCE,
+    kind: KIND_ANNOUNCEMENT,
     created_at: now(),
-    content: "",
+    content: "Enclaved: application server for AWS Nitro Enclaves",
     tags: [
       ["r", REPO],
       ["name", pkg.name],
@@ -118,8 +124,8 @@ export async function publishInstance(
       ["t", info.env],
       // admin interface relay with spam protection
       ["relay", inboxRelayUrl],
-      // expires in 3 hours, together with attestation doc
-      ["expiration", "" + (now() + CERT_TTL)],
+      // expires together with attestation doc
+      ["expiration", tv(root, "expiration")],
       ["alt", "enclaved server"],
       ["o", open ? "true" : "false"],
       ["comment", open ? "Open for new containers" : "Closed"],
@@ -155,6 +161,18 @@ export async function publishInstance(
     );
     if (!prod_ins && prod) {
       throw new Error("Instance is not for production!");
+    }
+  }
+  if (releases) {
+    for (const release of releases) {
+      ins.tags.push(["release", JSON.stringify(release)]);
+      ins.tags.push(["p", release.pubkey, "releaser"]);
+      const prod_release = release.tags.find(
+        (t) => t.length > 1 && t[0] === "t" && t[1] === "prod"
+      );
+      if (!prod_release && prod) {
+        throw new Error("Release is not for production!");
+      }
     }
   }
 

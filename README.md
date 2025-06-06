@@ -66,7 +66,7 @@ If clients rely on specific code hashes to verify the server, how can server be 
 
 That's where our custom key store (`keycrux`) will help. 
 
-To recover the state if `enclaved` is upgraded, an *update policy* is provided when disk key is uploaded to `keycrux`. Later on, when key is requested, if newly provided attestation differs from the one provided when key was stored, `keycrux` verifies the new attestation against the policy. Currently, the policy is roughly "the new build is signed by the same pubkeys", which means "if maintainers decided to upgrade the code, then it's ok to release the keys". 
+To recover the state if enclave is upgraded, an *update policy* is provided when disk key is uploaded to `keycrux`. Later on, when key is requested, if newly provided attestation differs from the one provided when key was stored, `keycrux` verifies the new attestation against the policy. Currently, the policy is roughly "the new build is signed by the same pubkeys", which means "if maintainers decided to upgrade the code, then it's ok to release the keys". The list of maintainer/signer pubkeys for `enclaved` is in [`release.json`](https://github.com/nostrband/enclaved/blob/main/release.json) and is included in the image, signatures of each maintainer are required to launch a production instance.
 
 For clients, instead of relying on specific [PCR values](https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where), we're proposing a similar approach: rely on a set of maintainers signing new code releases. When client discovers a service with unknown PCR values, it should check the set of `release signatures` - if those are made by the expected set of maintainers, then it is assumed that the service is valid.
 

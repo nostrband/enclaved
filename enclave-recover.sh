@@ -15,6 +15,7 @@ url = http://127.0.0.1:3080
 EOF
 
 if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
+  echo "Disk file backup found"
   # testing
   # ./node_modules/.bin/tsx src/index.ts cli set_key 
   # ./node_modules/.bin/tsx src/index.ts cli get_key 

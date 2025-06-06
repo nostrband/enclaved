@@ -1,9 +1,7 @@
-import { Event, generateSecretKey, getPublicKey } from "nostr-tools";
+import { Event, generateSecretKey } from "nostr-tools";
 import {
   ENCLAVED_RELAY,
-  KEYCRUX_PCR0,
-  KEYCRUX_PCR1,
-  KEYCRUX_PCR2,
+  KEYCRUX_RELEASE_SIGNERS,
   KEYCRUX_REPO,
   KIND_KEYCRUX_RPC,
   REPO,
@@ -11,19 +9,18 @@ import {
 } from "./consts";
 import { Client } from "./client";
 import { nsmGetAttestation, nsmParseAttestation } from "./nsm";
-import { KIND_INSTANCE, Validator } from "nostr-enclaves";
-import { hexToBytes } from "@noble/hashes/utils";
+import { KIND_ANNOUNCEMENT, Validator } from "nostr-enclaves";
 import fs from "node:fs";
 import { fetchFromRelays } from "../cli/utils";
 import { now } from "./utils";
+import { ReleasePolicy } from "./types";
 
 export async function validateKeycrux(e: Event) {
   const validator = new Validator({
-    expectedPcrs: new Map([
-      [0, hexToBytes(KEYCRUX_PCR0)],
-      [1, hexToBytes(KEYCRUX_PCR1)],
-      [2, hexToBytes(KEYCRUX_PCR2)],
-    ]),
+    expectedRelease: {
+      ref: KEYCRUX_REPO,
+      signerPubkeys: KEYCRUX_RELEASE_SIGNERS,
+    },
   });
   try {
     return await validator.validateInstance(e);
@@ -36,7 +33,7 @@ export async function validateKeycrux(e: Event) {
 export async function fetchKeycruxServices(relayUrl: string = SEARCH_RELAY) {
   const services = await fetchFromRelays(
     {
-      kinds: [KIND_INSTANCE],
+      kinds: [KIND_ANNOUNCEMENT],
       "#r": [KEYCRUX_REPO],
       since: now() - 3 * 3600,
     },
@@ -48,13 +45,14 @@ export async function fetchKeycruxServices(relayUrl: string = SEARCH_RELAY) {
   for (const s of services) {
     if (valid.has(s.pubkey) && valid.get(s.pubkey)!.created_at > s.created_at)
       continue;
-    if (1 || await validateKeycrux(s)) valid.set(s.pubkey, s);
+    if (await validateKeycrux(s)) valid.set(s.pubkey, s);
   }
 
   return [...valid.values()];
 }
 
 export async function uploadKeycrux(
+  releasePolicy?: ReleasePolicy,
   releases?: Event[],
   relayUrl: string = SEARCH_RELAY
 ) {
@@ -83,7 +81,7 @@ export async function uploadKeycrux(
       await client.start();
 
       try {
-        const ok = await client.set(data, releases);
+        const ok = await client.set(data, releasePolicy, releases);
         if (ok) {
           console.log(new Date(), "keycrux stored key at", s.pubkey, relayUrl);
           count++;
@@ -105,11 +103,12 @@ export async function uploadKeycrux(
 }
 
 export async function startKeycrux(
+  releasePolicy?: ReleasePolicy,
   releases?: Event[],
   relayUrl: string = SEARCH_RELAY
 ) {
   while (true) {
-    const count = await uploadKeycrux(releases, relayUrl);
+    const count = await uploadKeycrux(releasePolicy, releases, relayUrl);
     const pause = count > 1 ? 600000 : 60000;
     await new Promise((ok) => setTimeout(ok, pause));
   }
@@ -161,7 +160,7 @@ export class KeycruxClient extends Client {
     })) as string;
   }
 
-  public async set(data: string, releases?: Event[]) {
+  public async set(data: string, releasePolicy?: ReleasePolicy, releases?: Event[]) {
     const att = nsmGetAttestation(this.getPublicKey());
     const params: any = {
       attestation: att.toString("base64"),
@@ -178,7 +177,10 @@ export class KeycruxClient extends Client {
     const notDebug = !!attData?.pcrs.get(0)!.find((c) => c !== 0);
     if (releases && notDebug) {
       params.input.release_signatures = releases;
-      params.policy.release_pubkeys = releases.map((r) => r.pubkey);
+    }
+
+    if (releasePolicy && notDebug) {
+      params.policy.release_pubkeys = releasePolicy.signer_pubkeys;
     }
 
     return (

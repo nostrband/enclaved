@@ -3,6 +3,7 @@ import { verifyBuild, verifyInstance, verifyRelease } from "./aws";
 import { nsmGetAttestation, nsmParseAttestation } from "./nsm";
 import { InstanceInfo } from "./types";
 import { WSClient } from "./ws-client";
+import fs from "node:fs";
 
 export class ParentClient extends WSClient {
   private onShutdown?: () => void;
@@ -26,11 +27,17 @@ export class ParentClient extends WSClient {
     return this.call<any>("get_conf", []);
   }
 
-  async getMeta() {
+  async getMeta(): Promise<InstanceInfo> {
     const att = nsmGetAttestation();
     if (!att) {
       return {};
     }
+
+    const releasePolicy = JSON.parse(
+      fs.readFileSync("release.json").toString("utf8")
+    );
+    if (!releasePolicy.signer_pubkeys || !releasePolicy.signer_pubkeys.length)
+      throw new Error("No signer pubkeys");
 
     const attData = nsmParseAttestation(att);
     const { build, instance, releases, instanceAnnounceRelays, prod } =
@@ -44,6 +51,10 @@ export class ParentClient extends WSClient {
       verifyBuild(attData, build);
       verifyInstance(attData, instance);
       for (const release of releases) verifyRelease(attData, release);
+      for (const pubkey of releasePolicy.signer_pubkeys) {
+        if (!releases.find((r) => r.pubkey === pubkey))
+          throw new Error("Release signer not found");
+      }
     } else {
       if (process.env.DEBUG !== "true")
         throw new Error("Debug instance with DEBUG != true");
@@ -62,6 +73,13 @@ export class ParentClient extends WSClient {
       build,
       instance
     );
-    return { build, instance, releases, instanceAnnounceRelays, prod };
+    return {
+      build,
+      instance,
+      releases,
+      releasePolicy,
+      instanceAnnounceRelays,
+      prod,
+    };
   }
 }

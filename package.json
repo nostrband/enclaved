@@ -15,7 +15,7 @@
     "aws-nitro-enclaves-nsm-node": "^0.0.2",
     "cbor2": "^1.12.0",
     "http": "^0.0.1-security",
-    "nostr-enclaves": "^2.0.11",
+    "nostr-enclaves": "^2.0.15",
     "nostr-tools": "^2.12.0",
     "ws": "^8.18.1"
   },

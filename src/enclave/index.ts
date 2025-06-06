@@ -67,10 +67,16 @@ export async function startEnclave(opts: {
   });
 
   // get meta info from parent
-  const { build, instance, releases, instanceAnnounceRelays, prod } =
-    await parent.getMeta();
-
-  console.log(new Date(), "enclaved opts", opts);
+  const meta = await parent.getMeta();
+  console.log(new Date(), "meta", meta);
+  const {
+    build,
+    instance,
+    releases,
+    releasePolicy,
+    instanceAnnounceRelays,
+    prod,
+  } = meta;
 
   const servicePrivkey = getSecretKey(opts.dir);
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
@@ -140,6 +146,7 @@ export async function startEnclave(opts: {
   startAnnouncing({
     build,
     instance,
+    releases,
     signer: serviceSigner,
     inboxRelayUrl: opts.relayUrl,
     instanceAnnounceRelays,
@@ -148,7 +155,7 @@ export async function startEnclave(opts: {
   });
 
   // periodically save our key to keycrux
-  startKeycrux(releases);
+  startKeycrux(releasePolicy, releases);
 }
 
 // main

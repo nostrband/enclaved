@@ -4,8 +4,8 @@ import { ANNOUNCEMENT_INTERVAL } from "./consts";
 import { Signer } from "./types";
 import {
   prepareRootCertificate,
-  publishInstance,
-  publishInstanceProfile,
+  publishInstance as publishAnnouncement,
+  publishInstanceProfile as publishServiceProfile,
   publishNip65Relays,
   publishStats,
 } from "./nostr";
@@ -13,6 +13,7 @@ import {
 export interface AnnounceParams {
   build?: Event;
   instance?: Event;
+  releases?: Event[];
   signer: Signer;
   inboxRelayUrl: string;
   instanceAnnounceRelays?: string[];
@@ -34,11 +35,11 @@ async function announce(p: AnnounceParams) {
   // kind 10002
   await publishNip65Relays(p.signer, p.instanceAnnounceRelays);
 
-  // kind 63793
-  await publishInstance(p, attestation, root);
+  // kind 13793
+  await publishAnnouncement(p, attestation, root);
 
   // kind 0
-  await publishInstanceProfile(
+  await publishServiceProfile(
     p.signer,
     attestation.env,
     p.instanceAnnounceRelays
@@ -49,15 +50,7 @@ async function announce(p: AnnounceParams) {
     await publishStats(p.signer, await p.getStats(), p.instanceAnnounceRelays);
 }
 
-export function startAnnouncing(opt: {
-  build?: Event;
-  instance?: Event;
-  signer: Signer;
-  inboxRelayUrl: string;
-  instanceAnnounceRelays?: string[];
-  prod?: boolean;
-  getStats?: () => Promise<Map<string, string>>;
-}) {
+export function startAnnouncing(opt: AnnounceParams) {
   const tryAnnounce = async () => {
     try {
       await announce(opt);

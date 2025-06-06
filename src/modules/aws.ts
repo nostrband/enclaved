@@ -3,6 +3,9 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { X509Certificate } from "crypto";
 import { Event, nip19 } from "nostr-tools";
 import { AttestationData } from "./types";
+import { REPO } from "./consts";
+
+// FIXME remove this module, use nostr-enclaves lib
 
 export function pcrDigest(data: Buffer | Uint8Array | string) {
   return bytesToHex(
@@ -21,10 +24,10 @@ export function validateBuildCert(
   pubkey: string,
   pcr8: string
 ) {
-  certData =
-    "-----BEGIN CERTIFICATE-----\n" +
-    certData +
-    "\n-----END CERTIFICATE-----\n";
+  // certData =
+  //   "-----BEGIN CERTIFICATE-----\n" +
+  //   certData +
+  //   "\n-----END CERTIFICATE-----\n";
   const cert = new X509Certificate(certData);
   console.log("cert", cert);
   if (!cert.checkIssued(cert)) throw new Error("Cert not self-signed");
@@ -37,12 +40,17 @@ export function validateBuildCert(
     .find((s) => s.startsWith("O="))
     ?.split("=")[1];
   if (O !== "Nostr") throw new Error("Cert not for Nostr");
+  // deprecated
   const OU = cert.issuer
     .split("\n")
     .find((s) => s.startsWith("OU="))
     ?.split("=")[1];
+  const CN = cert.issuer
+    .split("\n")
+    .find((s) => s.startsWith("CN="))
+    ?.split("=")[1];
   const npub = nip19.npubEncode(pubkey);
-  if (OU !== npub) throw new Error("Wrong cert pubkey");
+  if (OU !== npub && CN !== npub) throw new Error("Wrong cert pubkey");
 
   // pcr8 validation https://github.com/aws/aws-nitro-enclaves-cli/issues/446#issuecomment-1460766038
   const fingerprint = sha384(cert.raw);
@@ -86,19 +94,19 @@ export function verifyInstance(att: AttestationData, instance: Event) {
   if (!instancePCR4) throw new Error("No PCR4 in instance");
   console.log("instancePCR4", instancePCR4);
   if (instancePCR4 !== enclavePCR4) throw new Error("No matching PCR4");
-  return true;
 }
 
 export function verifyRelease(att: AttestationData, release: Event) {
+  if (!release.tags.find((t) => t.length > 1 && t[0] === "r" && t[1] === REPO))
+    throw new Error("Wrong release ref");
   for (const i of [0, 1, 2]) {
     const enclavePCR = Buffer.from(att.pcrs.get(i) || []).toString("hex");
     if (!enclavePCR) throw new Error("Bad attestation, no PCR" + i);
 
     const instancePCR = release.tags.find(
-      (t) => t.length > 1 && t[0] === "PCR" + i
+      (t) => t.length > 2 && t[0] === "x" && t[2] === "PCR" + i
     )?.[1];
     if (!instancePCR) throw new Error(`No PCR${i} in instance`);
     if (instancePCR !== enclavePCR) throw new Error("No matching PCR" + i);
   }
-  return true;
 }

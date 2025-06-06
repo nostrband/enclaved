@@ -155,6 +155,7 @@ export async function fetchDockerImageInfo({
 
   // Step 2: Fetch the manifest
   const manifest = await fetchManifestWithToken(repository, reference, isDigest, token);
+  console.log("manifest", manifest);
 
   // if not list - return
   if (
@@ -162,12 +163,15 @@ export async function fetchDockerImageInfo({
       "application/vnd.docker.distribution.manifest.v2+json" ||
     manifest.mediaType === "application/vnd.oci.image.manifest.v1+json"
   ) {
+    const config = await fetchConfigBlob(repository, manifest.config.digest, token);
+    console.log("config", config);
     return manifest;
   }
 
   // find manifest hash for our platform
   const list = manifest as unknown as DockerDistributionManifestList;
   const digest = getDigest(list, architecture, os);
+  console.log("digest", digest);
   if (!digest) throw new Error("Failed to get digest");
 
   // Step 3: Fetch the platform-specific manifest
