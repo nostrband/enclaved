@@ -38,17 +38,19 @@ async function launch({
   adminPubkey,
   docker,
   units,
+  upgrade
 }: {
   relayUrl: string;
   adminPubkey: string;
   docker: string;
   units: number;
+  upgrade: string;
 }) {
   const privkey = generateSecretKey();
   const client = await getClient(relayUrl, adminPubkey, privkey);
   const reply = await client.send({
     method: "launch",
-    params: { docker, units },
+    params: { docker, units, upgrade },
   });
   console.log("launch", reply);
 }
@@ -68,7 +70,8 @@ export function mainEnclavedCli(argv: string[]) {
       const adminPubkey = argv[2];
       const docker = argv[3];
       const units = Number(argv[4]);
-      return launch({ relayUrl, adminPubkey, docker, units });
+      const upgrade = argv[5] || "";
+      return launch({ relayUrl, adminPubkey, docker, units, upgrade });
     }
     default: {
       throw new Error("Unknown command");

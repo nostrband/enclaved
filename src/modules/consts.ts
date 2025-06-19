@@ -16,6 +16,8 @@ export const KIND_INSTANCE_SIGNATURE = 23795;
 export const KIND_ENCLAVED_CERTIFICATE = 23797;
 
 export const KIND_RELEASE_SIGNATURE = 63794;
+export const KIND_DOCKER_RELEASE_SIGNATURE = 63795;
+export const KIND_DOCKER_RELEASE = 63796;
 
 
 // created 29.04.25
@@ -44,3 +46,5 @@ export const SEARCH_RELAY = "wss://relay.nostr.band/all";
 export const KEYCRUX_REPO = "https://github.com/nostrband/keycrux";
 // brugeman only for now
 export const KEYCRUX_RELEASE_SIGNERS = ["3356de61b39647931ce8b2140b2bab837e0810c0ef515bbe92de0248040b8bdd"];
+
+export const UPGRADE_CHECK_INTERVAL = 600000; // 10 minutes

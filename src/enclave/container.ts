@@ -23,6 +23,7 @@ export class Container {
   private announcing = false;
   private state?: ContainerState;
   private appInfo?: any;
+  private upgrading: boolean = false;
 
   info: DBContainer;
   walletPubkey?: string;
@@ -57,6 +58,18 @@ export class Container {
     // launch or pause
     if (s === "deployed") await this.up();
     else if (s === "paused") await this.down();
+  }
+
+  public startUpgrade() {
+    this.upgrading = true;
+  }
+
+  public endUpgrade() {
+    this.upgrading = false;
+  }
+
+  public isUpgrading() {
+    return this.upgrading;
   }
 
   public async changeState(s: ContainerState) {

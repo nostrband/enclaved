@@ -1,5 +1,12 @@
 import fs from "node:fs";
-import { Event, UnsignedEvent, nip19 } from "nostr-tools";
+import {
+  Event,
+  Filter,
+  UnsignedEvent,
+  nip19,
+  validateEvent,
+  verifyEvent,
+} from "nostr-tools";
 import { AttestationInfo, Signer } from "./types";
 import {
   CERT_TTL,
@@ -11,11 +18,13 @@ import {
   KIND_RELAYS,
   KIND_ROOT_CERTIFICATE,
   REPO,
+  KIND_DOCKER_RELEASE,
+  KIND_DOCKER_RELEASE_SIGNATURE,
 } from "./consts";
 import { now } from "./utils";
-import { Relay } from "./relay";
+import { Relay, Req } from "./relay";
 import { AnnounceParams } from "./announce";
-import { bytesToHex } from "@noble/hashes/utils";
+import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import { DBContainer } from "./db";
 import { PrivateKeySigner } from "./signer";
 import { X509Certificate } from "node:crypto";
@@ -394,4 +403,134 @@ export async function prepareAppCert(params: {
     ],
   };
   return await containerSigner.signEvent(tmpl);
+}
+
+export async function fetchEvents(filter: Filter, relays: string[]) {
+  const events = new Map<string, Event>();
+  const makeReq = (ok: () => void): Req => {
+    return {
+      id: bytesToHex(randomBytes(6)),
+      fetch: true,
+      filter,
+      onEOSE(es) {
+        for (const e of es) events.set(e.id, e);
+        ok();
+      },
+    };
+  };
+
+  const promises = relays.map((url) => {
+    const r = new Relay(url);
+    return new Promise<void>((ok) => r.req(makeReq(ok))).finally(() =>
+      r.dispose()
+    );
+  });
+  await Promise.race([
+    new Promise((ok) => setTimeout(ok, 5000)),
+    Promise.allSettled(promises),
+  ]);
+
+  // sort events by tm desc
+  return [...events.values()].sort((a, b) => b.created_at! - a.created_at!);
+}
+
+export function isNewVersion(v1: string, v0: string) {
+  const f1 = v1.split(".");
+  const f0 = v0.split(".");
+  for (let i = 0; i < f1.length; i++) {
+    // newer version with more fragments
+    if (i >= f0.length) return true;
+    // numerical fragment values
+    const n1 = Number(f1[i]);
+    const n0 = Number(f0[i]);
+    // same fragment?
+    if (n1 === n0) continue;
+    // newer frament?
+    if (n1 > n0) return true;
+    // older fragment
+    return false;
+  }
+  // all same and f1 is over - either versions are
+  // the same or v0 is longer (thus v1 is older)
+  return false;
+}
+
+export async function checkUpgrade(
+  signers: string[],
+  relays: string[],
+  repo: string,
+  version: string
+) {
+  const events = await fetchEvents(
+    {
+      authors: signers,
+      kinds: [KIND_DOCKER_RELEASE],
+      "#r": [repo],
+    },
+    relays
+  );
+
+  const newReleases = events.filter(
+    (e) =>
+      e.kind === KIND_DOCKER_RELEASE &&
+      signers.includes(e.pubkey) &&
+      tv(e, "r") === repo &&
+      !!tv(e, "x") &&
+      !!tv(e, "u") &&
+      isNewVersion(tv(e, "v") || "", version)
+  );
+
+  const isProd = (e: Event) =>
+    !!e.tags.find((t) => t.length > 1 && t[0] === "t" && t[1] === "prod");
+
+  const validReleases: Event[] = [];
+  for (const r of newReleases) {
+    const id = tv(r, "x");
+    const repo = tv(r, "r");
+    const version = tv(r, "v");
+    const prod = isProd(r);
+
+    const sigTags = r.tags
+      .filter((t) => t.length > 1 && t[0] === "release")
+      .map((t) => t[1]);
+    const sigs: Event[] = [];
+    for (const st of sigTags) {
+      try {
+        const sig = JSON.parse(st);
+        if (
+          !validateEvent(sig) ||
+          sig.kind !== KIND_DOCKER_RELEASE_SIGNATURE ||
+          !signers.includes(sig.pubkey) ||
+          tv(sig, "r") !== repo ||
+          tv(sig, "x") !== id ||
+          tv(sig, "v") !== version ||
+          isProd(sig) !== prod ||
+          !verifyEvent(sig)
+        )
+          continue;
+
+        sigs.push(sig);
+      } catch {}
+    }
+
+    if (sigs.length < signers.length) continue;
+    let invalid = false;
+    for (const pubkey of signers) {
+      if (!sigs.find((s) => s.pubkey === pubkey)) {
+        invalid = true;
+        break;
+      }
+    }
+    if (!invalid) validReleases.push(r);
+  }
+
+  return validReleases.sort((a, b) => {
+    const va = tv(a, "v")!;
+    const vb = tv(b, "v")!;
+    const na = isNewVersion(va, vb);
+    const nb = isNewVersion(vb, va);
+    if (na) return -1;
+    if (nb) return 1;
+    return 0;
+  });
 }

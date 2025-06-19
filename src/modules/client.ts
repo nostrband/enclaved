@@ -42,8 +42,8 @@ export class Client {
     return this.relay;
   }
 
-  public getPublicKey() {
-    return getPublicKey(this.privkey!);
+  public async getPublicKey() {
+    return Promise.resolve(getPublicKey(this.privkey!));
   }
 
   public async send({

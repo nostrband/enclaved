@@ -17,6 +17,12 @@ import { fromNWC, NWCClient } from "../modules/nwc-client";
 import { NWCTransaction } from "../modules/nwc-types";
 import { fetchDockerImageInfo } from "../modules/manifest";
 import { Relay } from "../modules/relay";
+import {
+  inspectContainerImage,
+  parseContainerImageLabels,
+} from "../modules/docker";
+import { checkUpgrade } from "../modules/nostr";
+import { tv } from "nostr-enclaves";
 
 export class AppServer extends EnclavedServer {
   private off: boolean = false;
@@ -67,7 +73,12 @@ export class AppServer extends EnclavedServer {
       if (info.isBuiltin) continue;
 
       // add it
-      console.log("existing container", info.pubkey, info.portsFrom, info.state);
+      console.log(
+        "existing container",
+        info.pubkey,
+        info.portsFrom,
+        info.state
+      );
       const cont = new Container(info, this.context);
       this.conts.set(cont.info.pubkey, cont);
 
@@ -88,7 +99,10 @@ export class AppServer extends EnclavedServer {
     console.log("startContainers done");
 
     // start charge monitor
-    await this.chargeMonitor();
+    this.chargeMonitor();
+
+    // start upgrade monitor
+    this.upgradeMonitor();
   }
 
   public containerCount() {
@@ -124,6 +138,7 @@ export class AppServer extends EnclavedServer {
       env: params.env,
       name: params.name || pubkey,
       balance: 0,
+      upgrade: params.upgrade || "",
     };
   }
 
@@ -146,6 +161,167 @@ export class AppServer extends EnclavedServer {
     }
   }
 
+  private async upgradeMonitor() {
+    // periodically check each container's metadata,
+    // check relays for upgrades published by signers,
+    // and run the upgrade by changing the docker url,
+    // then restarting the container
+    while (!this.off) {
+      const start = Date.now();
+      console.log(Date.now(), "upgrade monitor");
+
+      for (const c of this.conts.values()) {
+        if (
+          c.info.isBuiltin ||
+          c.info.state !== "deployed" ||
+          !c.info.docker ||
+          c.info.upgrade !== "auto"
+        )
+          continue;
+
+        try {
+          const info = await inspectContainerImage(c.info.docker!);
+
+          const newReleases = await checkUpgrade(
+            info.signers,
+            info.upgradeRelays,
+            info.repo,
+            info.version
+          );
+          if (!newReleases) continue;
+
+          // remember current image uri to rollback if needed
+          const oldUri = c.info.docker;
+
+          // try upgrading from newest to oldest
+          for (const r of newReleases) {
+            const uri = tv(r, "u")!;
+            const rid = tv(r, "x")!;
+            const rv = tv(r, "v")!;
+            const rrepo = tv(r, "r")!;
+            try {
+              const { manifest, config } = await fetchDockerImageInfo({
+                imageRef: uri,
+              });
+
+              const drid = manifest.config.digest;
+              const rinfo = parseContainerImageLabels(config.config.Labels);
+              if (
+                rid !== drid ||
+                rinfo.repo !== rrepo ||
+                rinfo.version !== rv
+                // FIXME also check signers?
+              )
+                throw new Error("Invalid new release labels");
+            } catch (e) {
+              console.log(
+                "Failed to check new release for container",
+                c.info.pubkey,
+                c.info.docker,
+                uri
+              );
+              continue;
+            }
+
+            try {
+              // attempt an upgrade
+              await this.upgrade(c, uri);
+
+              // commit
+              this.db.setContainerDockerUri(c.info.pubkey, uri);
+            } catch (e) {
+              console.log(
+                "Failed to upgrade",
+                c.info.pubkey,
+                c.info.docker,
+                uri,
+                e
+              );
+            }
+
+            // done?
+            if (!c.isUpgrading()) break;
+          }
+
+          // failed to upgrade properly?
+          if (c.isUpgrading()) {
+            // cleanup
+            await this.rollback(c, oldUri);
+          }
+        } catch (e) {
+          console.log(
+            "Failed to check for upgrades",
+            c.info.pubkey,
+            c.info.docker,
+            e
+          );
+        }
+      }
+
+      // pause for 10 minutes
+      const diff = Date.now() - start;
+      await new Promise((ok) => setTimeout(ok, 600000 - diff));
+    }
+  }
+
+  private async upgrade(c: Container, uri: string) {
+    console.log(
+      new Date(),
+      "upgrading",
+      c.info.pubkey,
+      "from",
+      c.info.docker,
+      "to",
+      uri
+    );
+
+    // mark as upgrading
+    c.startUpgrade();
+
+    // pause
+    await this.pause(c);
+
+    // set new uri
+    c.info.docker = uri;
+
+    // FIXME check new image size to make sure it doesn't exceed the units!
+
+    // launch
+    await this.deploy(c);
+
+    // done
+    c.endUpgrade();
+    console.log(new Date(), "upgraded", c.info.pubkey, "to", uri);
+  }
+
+  private async rollback(c: Container, uri: string) {
+    console.log(
+      new Date(),
+      "rollback",
+      c.info.pubkey,
+      "from",
+      c.info.docker,
+      "to",
+      uri
+    );
+
+    // mark as upgrading
+    c.startUpgrade();
+
+    // pause
+    await this.pause(c);
+
+    // set new uri
+    c.info.docker = uri;
+
+    // launch
+    await this.deploy(c);
+
+    // done
+    c.endUpgrade();
+    console.log(new Date(), "rolled back", c.info.pubkey, "to", uri);
+  }
+
   private async chargeMonitor() {
     // scan containers every 1 second to check
     // if we need to change their state
@@ -155,6 +331,7 @@ export class AppServer extends EnclavedServer {
       console.log(Date.now(), "charge monitor");
       for (const c of this.conts.values()) {
         if (c.info.isBuiltin) continue;
+        if (c.isUpgrading()) continue;
 
         // already deployed?
         if (c.info.state === "deployed") {
@@ -298,6 +475,9 @@ export class AppServer extends EnclavedServer {
         info.env = params.env;
         info.units = params.units;
       }
+
+      // ensure, builtins are never auto-upgraded
+      info.upgrade = "";
 
       // save updated info
       this.db.upsertContainer(info);
@@ -473,7 +653,7 @@ export class AppServer extends EnclavedServer {
     if (usedUnits + req.params.units > TOTAL_UNITS)
       throw new Error("Not enough free units");
 
-    const manifest = await fetchDockerImageInfo({
+    const { manifest } = await fetchDockerImageInfo({
       imageRef: req.params.docker,
     });
     console.log("manifest of", req.params.docker, manifest);
@@ -481,7 +661,7 @@ export class AppServer extends EnclavedServer {
     console.log("image size", req.params.docker, imageSize);
 
     // image > 80% of disk space?
-    if (imageSize > (req.params.units * DISK_PER_UNIT_MB * 1024 * 1024) * 0.8)
+    if (imageSize > req.params.units * DISK_PER_UNIT_MB * 1024 * 1024 * 0.8)
       throw new Error("Need more units for this image");
 
     // create key and container info

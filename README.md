@@ -22,6 +22,10 @@ We also love Bitcoin and Nostr, so we're making `enclaved` discoverable on Nostr
 
 Should be fun, right?!
 
+## Nostr Enclaves
+
+We are describing our approach to nostr-focused apps deployed in TEEs using [NECs](https://github.com/nostrband/necs) (Nostr Enclave Conventions), the Nostr event formats, discovery methods, cryptographic operations and validation rules are formally described there.
+
 ## Architecture
 
 AWS Nitro Enclaves are kind of like a virtual machine launched inside an EC2 server instance. Some CPUs and RAM are reserved for the enclave, and AWS Nitro hypervisor isolates it from the parent. The enclave doesn't have network or persistent storage. The only interface is `/dev/vsock` allowing comms with the parent instance. The only disk space is RAM allocated to the enclave. If the enclave is restarted, the state is gone.

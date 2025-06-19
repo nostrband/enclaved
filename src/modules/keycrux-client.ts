@@ -137,7 +137,7 @@ export class KeycruxClient extends Client {
   }
 
   public async get(releases?: Event[]) {
-    const att = nsmGetAttestation(this.getPublicKey());
+    const att = nsmGetAttestation(await this.getPublicKey());
     const params: any = {
       attestation: att.toString("base64"),
       input: {
@@ -161,7 +161,7 @@ export class KeycruxClient extends Client {
   }
 
   public async set(data: string, releasePolicy?: ReleasePolicy, releases?: Event[]) {
-    const att = nsmGetAttestation(this.getPublicKey());
+    const att = nsmGetAttestation(await this.getPublicKey());
     const params: any = {
       attestation: att.toString("base64"),
       data,

@@ -20,6 +20,7 @@ export interface DBContainer {
   uptimeCount: number;
   uptimePaid: number;
   balance: number;
+  upgrade: string;
 }
 
 export class DB {
@@ -29,7 +30,7 @@ export class DB {
     this.db = new DatabaseSync(file);
     try {
       this.db.exec(`
-      ALTER TABLE containers ADD COLUMN balance INTEGER DEFAULT 0
+        ALTER TABLE containers ADD COLUMN balance INTEGER DEFAULT 0
       `);
     } catch {
       this.db.exec(`
@@ -53,6 +54,12 @@ export class DB {
       )
     `);
     }
+
+    try {
+      this.db.exec(`
+        ALTER TABLE containers ADD COLUMN upgrade TEXT DEFAULT ""
+      `);
+    } catch {}
     this.db.exec(`
       CREATE UNIQUE INDEX IF NOT EXISTS containers_pubkey_index 
       ON containers (pubkey)
@@ -94,6 +101,7 @@ export class DB {
       name: rec.name as string,
       paymentHash: rec.payment_hash as string,
       balance: rec.balance as number,
+      upgrade: rec.upgrade as string,
     };
   }
 
@@ -192,6 +200,14 @@ export class DB {
     `);
     const r = up.run(balance, pubkey);
     if (!r.changes) throw new Error("Failed to set container balance");
+  }
+
+  public setContainerDockerUri(pubkey: string, uri: string) {
+    const up = this.db.prepare(`
+      UPDATE containers SET docker = ? WHERE pubkey = ?
+    `);
+    const r = up.run(uri, pubkey);
+    if (!r.changes) throw new Error("Failed to set container docker uri");
   }
 
   public deleteContainer(pubkey: string) {

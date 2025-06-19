@@ -7,7 +7,6 @@ import { sha256 } from "@noble/hashes/sha2";
 import { bytesToHex } from "@noble/hashes/utils";
 import { DISK_PER_UNIT_MB, VOLUME_PER_UNIT_MB } from "./consts";
 
-
 export interface LaunchRequest {
   dir: string;
   docker: string;
@@ -17,9 +16,78 @@ export interface LaunchRequest {
   prod: boolean;
 }
 
+export interface DockerImageInspect {
+  Id: string;
+  RepoTags?: string[];
+  RepoDigests?: string[];
+  Parent?: string;
+  Comment?: string;
+  Created: string;
+  Config: {
+    Volumes: any;
+    WorkingDir: string;
+    Entrypoint?: string[];
+    Labels: any;
+  };
+  Architecture: string;
+  Os: string;
+  Size: number;
+}
+
 function getPath(cont: DBContainer, context: ContainerContext) {
   const pubkey = getPublicKey(cont.seckey);
   return context.dir + "/metadata/" + pubkey;
+}
+
+export function parseContainerImageLabels(labels?: Record<string, string>) {
+  if (
+    !labels ||
+    !("signers" in labels) ||
+    !("repo" in labels) ||
+    !("signer_relays" in labels) ||
+    !("version" in labels)
+  )
+    throw new Error("Invalid container image labels");
+
+  const parse = (s: string) =>
+    s
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => !!s);
+
+  const signers = parse(labels["signers"]);
+  const signerRelays = parse(labels["signer_relays"]);
+  const upgradeRelays = labels["upgrade_relays"]
+    ? parse(labels["upgrade_relays"])
+    : signerRelays;
+  const version = labels["version"];
+  const repo = labels["repo"];
+  return {
+    signers,
+    signerRelays,
+    upgradeRelays,
+    version,
+    repo,
+  };
+}
+
+export async function inspectContainerImage(image: string) {
+  const info = await inspect(image);
+  return parseContainerImageLabels(info.Config.Labels);
+}
+
+export async function inspect(image: string) {
+  const args = ["image", "inspect", image];
+  const { code, out } = await exec("docker", args);
+  if (code !== 0) throw new Error("Failed to run docker inspect");
+
+  try {
+    const data = JSON.parse(out);
+    return data[0] as DockerImageInspect;
+  } catch (e) {
+    console.log("Failed to inspect", image, e);
+    throw new Error("Failed to inspect " + image);
+  }
 }
 
 async function compose(params: {
@@ -42,7 +110,7 @@ async function compose(params: {
     exec("docker", args);
   } else {
     const { code } = await exec("docker", args);
-    if (code !== 0) throw new Error("Failed to run docker compose");  
+    if (code !== 0) throw new Error("Failed to run docker compose");
   }
 }
 
@@ -101,7 +169,9 @@ export async function up(cont: DBContainer, context: ContainerContext) {
     for (const path of volumes) {
       if (!path.trim()) continue;
 
-      const size = Math.floor((cont.units * VOLUME_PER_UNIT_MB) / volumes.length);
+      const size = Math.floor(
+        (cont.units * VOLUME_PER_UNIT_MB) / volumes.length
+      );
 
       // naming: pubkey_hash(path)
       const name =

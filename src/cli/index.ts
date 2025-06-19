@@ -30,6 +30,7 @@ import {
   uploadKeycrux,
 } from "../modules/keycrux-client";
 import { nsmInit } from "../modules/nsm";
+import { checkUpgrade, isNewVersion } from "../modules/nostr";
 
 async function readLine() {
   const rl = readline.createInterface({
@@ -385,6 +386,22 @@ async function dockerInspect(dockerUrl: string) {
   console.log("manifest", manifest);
 }
 
+async function checkIsNewVersion(v1: string, v0: string) {
+  const newer = isNewVersion(v1, v0);
+  console.log("newer", newer, v1, "than", v0);
+  return Promise.resolve();
+}
+
+async function checkDockerUpgrade(
+  signers: string[],
+  relays: string[],
+  repo: string,
+  version: string
+) {
+  const releases = await checkUpgrade(signers, relays, repo, version);
+  console.log("new releases", releases.map(r => JSON.stringify(r)));
+}
+
 export function mainCli(argv: string[]) {
   if (!argv.length) throw new Error("Command not specified");
 
@@ -424,6 +441,16 @@ export function mainCli(argv: string[]) {
     case "docker_inspect": {
       const dockerUrl = argv[1];
       return dockerInspect(dockerUrl);
+    }
+    case "is_new_version": {
+      return checkIsNewVersion(argv[1], argv[2]);
+    }
+    case "check_docker_upgrades": {
+      const signers = argv[1].split(',');
+      const relays = argv[2].split(',');
+      const repo = argv[3];
+      const version = argv[4];
+      return checkDockerUpgrade(signers, relays, repo, version);
     }
     // case "publish_build": {
     //   // docker config/manifest hashes taken from build/docker.json
