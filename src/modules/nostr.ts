@@ -82,8 +82,11 @@ export async function prepareRootCertificate(
   info: AttestationInfo,
   signer: Signer
 ) {
-  const cert = new X509Certificate(info.info!.certificate);
-  const expiration = Math.floor(cert.validToDate.getTime() / 1000);
+  let expiration = CERT_TTL;
+  if (info.info) {
+    const cert = new X509Certificate(info.info!.certificate);
+    expiration = Math.floor(cert.validToDate.getTime() / 1000);
+  }
   const servicePubkey = await signer.getPublicKey();
   const tmpl: UnsignedEvent = {
     pubkey: servicePubkey,

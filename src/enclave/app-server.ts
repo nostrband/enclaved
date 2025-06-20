@@ -10,6 +10,7 @@ import {
   PORTS_PER_CONTAINER,
   SATS_PER_UNIT_PER_INTERVAL,
   TOTAL_UNITS,
+  UPGRADE_CHECK_INTERVAL,
 } from "../modules/consts";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils";
 import { now } from "../modules/utils";
@@ -203,8 +204,10 @@ export class AppServer extends EnclavedServer {
               const { manifest, config } = await fetchDockerImageInfo({
                 imageRef: uri,
               });
+              if (!manifest.config.digest.startsWith("sha256:"))
+                throw new Error("Wrong release digest format");
 
-              const drid = manifest.config.digest;
+              const drid = manifest.config.digest.split("sha256:")[1];
               const rinfo = parseContainerImageLabels(config.config.Labels);
               if (
                 rid !== drid ||
@@ -218,7 +221,8 @@ export class AppServer extends EnclavedServer {
                 "Failed to check new release for container",
                 c.info.pubkey,
                 c.info.docker,
-                uri
+                uri,
+                e
               );
               continue;
             }
@@ -260,7 +264,7 @@ export class AppServer extends EnclavedServer {
 
       // pause for 10 minutes
       const diff = Date.now() - start;
-      await new Promise((ok) => setTimeout(ok, 600000 - diff));
+      await new Promise((ok) => setTimeout(ok, UPGRADE_CHECK_INTERVAL - diff));
     }
   }
 
