@@ -124,6 +124,10 @@ class ParentServer extends WSServer {
     };
   }
 
+  private async log(params: string[]) {
+    console.log(new Date(), "enclave log: ", params);
+  }
+
   protected async handle(req: Req, rep: Rep) {
     try {
       switch (req.method) {
@@ -132,6 +136,9 @@ class ParentServer extends WSServer {
           break;
         case "get_meta":
           rep.result = await this.getMeta(req.params);
+          break;
+        case "log":
+          rep.result = await this.log(req.params);
           break;
         default:
           throw new Error("Unknown method");

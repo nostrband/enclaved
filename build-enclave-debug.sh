@@ -50,8 +50,3 @@ docker image rm ${FILE}:latest
 # otherwise someone else could launch an instance 
 # that would report itself as $NPUB's 
 #rm ${BUILD}${KEY}
-
-# create a file to be served by parent process to the
-# enclave so that enclave could report the $NPUB as builder
-# of this instance
-#./node_modules/.bin/tsx src/index.ts cli sign_build ${BUILD}

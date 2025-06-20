@@ -14,6 +14,7 @@ import fs from "node:fs";
 import { fetchFromRelays } from "../cli/utils";
 import { now } from "./utils";
 import { ReleasePolicy } from "./types";
+import { ParentClient } from "./parent-client";
 
 export async function validateKeycrux(e: Event) {
   const validator = new Validator({
@@ -54,7 +55,7 @@ export async function fetchKeycruxServices(relayUrl: string = SEARCH_RELAY) {
 export async function uploadKeycrux(
   releasePolicy?: ReleasePolicy,
   releases?: Event[],
-  relayUrl: string = SEARCH_RELAY
+  relayUrl: string = SEARCH_RELAY,
 ) {
   const file = fs.readFileSync("age.key").toString("utf8");
   if (!file) throw new Error("No age.key");
@@ -103,12 +104,14 @@ export async function uploadKeycrux(
 }
 
 export async function startKeycrux(
+  parent: ParentClient,
   releasePolicy?: ReleasePolicy,
   releases?: Event[],
   relayUrl: string = SEARCH_RELAY
 ) {
   while (true) {
     const count = await uploadKeycrux(releasePolicy, releases, relayUrl);
+    parent.log("keycrux uploaded " + count);
     const pause = count > 1 ? 600000 : 60000;
     await new Promise((ok) => setTimeout(ok, pause));
   }

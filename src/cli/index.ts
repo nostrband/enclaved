@@ -191,83 +191,83 @@ async function createSigner(pubkey: string): Promise<Signer> {
 //   );
 // }
 
-async function signBuild(dir: string) {
-  const prod = process.env.PROD === "true";
+// async function signBuild(dir: string) {
+//   const prod = process.env.PROD === "true";
 
-  const pubkey = readPubkey(dir);
-  console.log("pubkey", pubkey);
+//   const pubkey = readPubkey(dir);
+//   console.log("pubkey", pubkey);
 
-  const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
-  console.log("pcrs", pcrs);
+//   const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
+//   console.log("pcrs", pcrs);
 
-  const cert = readCert(dir);
-  console.log("cert", cert);
+//   const cert = readCert(dir);
+//   console.log("cert", cert);
 
-  const pkg = readPackageJson();
-  console.log("package.json", pkg);
+//   const pkg = readPackageJson();
+//   console.log("package.json", pkg);
 
-  const signer = await createSigner(pubkey);
+//   const signer = await createSigner(pubkey);
 
-  // PCR8 is unique on every build (the way we do the build)
-  // so reuse of this event is impossible
-  const unsigned = {
-    created_at: now(),
-    kind: KIND_BUILD_SIGNATURE,
-    content: "",
-    pubkey: await signer.getPublicKey(),
-    tags: [
-      ["-"], // not for publishing
-      ["r", REPO],
-      ["v", pkg.version],
-      ["t", prod ? "prod" : "dev"],
-      ["cert", cert],
-      ["PCR8", pcrs.Measurements["PCR8"]],
-    ],
-  };
-  console.log("signing", unsigned);
-  const event = await signer.signEvent(unsigned);
-  console.log("signed", event);
+//   // PCR8 is unique on every build (the way we do the build)
+//   // so reuse of this event is impossible
+//   const unsigned = {
+//     created_at: now(),
+//     kind: KIND_BUILD_SIGNATURE,
+//     content: "",
+//     pubkey: await signer.getPublicKey(),
+//     tags: [
+//       ["-"], // not for publishing
+//       ["r", REPO],
+//       ["v", pkg.version],
+//       ["t", prod ? "prod" : "dev"],
+//       ["cert", cert],
+//       ["PCR8", pcrs.Measurements["PCR8"]],
+//     ],
+//   };
+//   console.log("signing", unsigned);
+//   const event = await signer.signEvent(unsigned);
+//   console.log("signed", event);
 
-  fs.writeFileSync(dir + "/build.json", JSON.stringify(rawEvent(event)));
-}
+//   fs.writeFileSync(dir + "/build.json", JSON.stringify(rawEvent(event)));
+// }
 
-async function signRelease(dir: string) {
-  const prod = process.env.PROD === "true";
+// async function signRelease(dir: string) {
+//   const prod = process.env.PROD === "true";
 
-  const pubkey = readPubkey(dir);
-  console.log("pubkey", pubkey);
+//   const pubkey = readPubkey(dir);
+//   console.log("pubkey", pubkey);
 
-  const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
-  console.log("pcrs", pcrs);
+//   const pcrs = JSON.parse(fs.readFileSync(dir + "/pcrs.json").toString("utf8"));
+//   console.log("pcrs", pcrs);
 
-  const pkg = readPackageJson();
-  console.log("package.json", pkg);
+//   const pkg = readPackageJson();
+//   console.log("package.json", pkg);
 
-  const signer = await createSigner(pubkey);
+//   const signer = await createSigner(pubkey);
 
-  const unsigned = {
-    created_at: now(),
-    kind: KIND_RELEASE_SIGNATURE,
-    content: "",
-    pubkey: await signer.getPublicKey(),
-    tags: [
-      ["t", prod ? "prod" : "dev"],
-      ["r", REPO],
-      ["v", pkg.version],
-      ["x", pcrs.Measurements["PCR0"], "PCR0"],
-      ["x", pcrs.Measurements["PCR1"], "PCR1"],
-      ["x", pcrs.Measurements["PCR2"], "PCR2"],
-    ],
-  };
-  console.log("signing", unsigned);
-  const event = await signer.signEvent(unsigned);
-  console.log("signed", event);
+//   const unsigned = {
+//     created_at: now(),
+//     kind: KIND_RELEASE_SIGNATURE,
+//     content: "",
+//     pubkey: await signer.getPublicKey(),
+//     tags: [
+//       ["t", prod ? "prod" : "dev"],
+//       ["r", REPO],
+//       ["v", pkg.version],
+//       ["x", pcrs.Measurements["PCR0"], "PCR0"],
+//       ["x", pcrs.Measurements["PCR1"], "PCR1"],
+//       ["x", pcrs.Measurements["PCR2"], "PCR2"],
+//     ],
+//   };
+//   console.log("signing", unsigned);
+//   const event = await signer.signEvent(unsigned);
+//   console.log("signed", event);
 
-  const path = dir + "/release";
-  fs.mkdirSync(path, { recursive: true });
-  const npub = nip19.npubEncode(pubkey);
-  fs.writeFileSync(`${path}/${npub}.json`, JSON.stringify(rawEvent(event)));
-}
+//   const path = dir + "/release";
+//   fs.mkdirSync(path, { recursive: true });
+//   const npub = nip19.npubEncode(pubkey);
+//   fs.writeFileSync(`${path}/${npub}.json`, JSON.stringify(rawEvent(event)));
+// }
 
 async function ensureInstanceSignature(dir: string) {
   const prod = process.env.PROD === "true";
@@ -426,14 +426,14 @@ export function mainCli(argv: string[]) {
       const port = Number(argv[1]) || 2080;
       return parentGetIP({ port });
     }
-    case "sign_build": {
-      const dir = argv?.[1] || "./build/";
-      return signBuild(dir);
-    }
-    case "sign_release": {
-      const dir = argv?.[1] || "./release/";
-      return signRelease(dir);
-    }
+    // case "sign_build": {
+    //   const dir = argv?.[1] || "./build/";
+    //   return signBuild(dir);
+    // }
+    // case "sign_release": {
+    //   const dir = argv?.[1] || "./release/";
+    //   return signRelease(dir);
+    // }
     case "ensure_instance_signature": {
       const dir = argv?.[1] || "./instance/";
       return ensureInstanceSignature(dir);

@@ -11,7 +11,7 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { AppServer } from "./app-server";
 import { ContainerServer } from "./container-server";
 import { ContainerContext } from "./container";
-import { startKeycrux } from "../modules/keycrux-client";
+import { fetchKeycruxServices, startKeycrux } from "../modules/keycrux-client";
 
 function getSecretKey(dir: string) {
   const FILE = dir + "/.service.sk";
@@ -99,6 +99,7 @@ export async function startEnclave(opts: {
     contEndpoint: `ws://${ip}:${contPort}`,
     relays: [opts.relayUrl],
     instanceAnnounceRelays,
+    parent,
   };
 
   // init the server
@@ -155,7 +156,7 @@ export async function startEnclave(opts: {
   });
 
   // periodically save our key to keycrux
-  startKeycrux(releasePolicy, releases);
+  startKeycrux(parent, releasePolicy, releases);
 }
 
 // main

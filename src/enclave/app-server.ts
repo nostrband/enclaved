@@ -271,12 +271,10 @@ export class AppServer extends EnclavedServer {
   private async upgrade(c: Container, uri: string) {
     console.log(
       new Date(),
-      "upgrading",
-      c.info.pubkey,
-      "from",
-      c.info.docker,
-      "to",
-      uri
+      `upgrading ${c.info.pubkey} from ${c.info.docker} to ${uri}`
+    );
+    this.context.parent.log(
+      `upgrading ${c.info.pubkey} from ${c.info.docker} to ${uri}`
     );
 
     // mark as upgrading
@@ -296,17 +294,16 @@ export class AppServer extends EnclavedServer {
     // done
     c.endUpgrade();
     console.log(new Date(), "upgraded", c.info.pubkey, "to", uri);
+    this.context.parent.log(`upgraded ${c.info.pubkey} to ${uri}`);
   }
 
   private async rollback(c: Container, uri: string) {
     console.log(
       new Date(),
-      "rollback",
-      c.info.pubkey,
-      "from",
-      c.info.docker,
-      "to",
-      uri
+      `rollback ${c.info.pubkey} from ${c.info.docker} to ${uri}`
+    );
+    this.context.parent.log(
+      `rollback ${c.info.pubkey} from ${c.info.docker} to ${uri}`
     );
 
     // mark as upgrading
@@ -324,6 +321,7 @@ export class AppServer extends EnclavedServer {
     // done
     c.endUpgrade();
     console.log(new Date(), "rolled back", c.info.pubkey, "to", uri);
+    this.context.parent.log(`rolled back ${c.info.pubkey} to ${uri}`);
   }
 
   private async chargeMonitor() {

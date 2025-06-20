@@ -19,6 +19,10 @@ export class ParentClient extends WSClient {
     }
   }
 
+  log(s: string) {
+    return this.call<void>("log", [s]);
+  }
+
   getIP() {
     return this.call<{ ip: string }>("get_ip", []);
   }

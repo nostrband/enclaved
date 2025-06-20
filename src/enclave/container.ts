@@ -7,6 +7,7 @@ import {
 } from "../modules/nostr";
 import { nsmGetAttestationInfo } from "../modules/nsm";
 import { PrivateKeySigner } from "../modules/signer";
+import { ParentClient } from "../modules/parent-client";
 
 export interface ContainerContext {
   dir: string;
@@ -15,6 +16,7 @@ export interface ContainerContext {
   relays: string[];
   instanceAnnounceRelays?: string[];
   contEndpoint: string;
+  parent: ParentClient;
 }
 
 export class Container {
