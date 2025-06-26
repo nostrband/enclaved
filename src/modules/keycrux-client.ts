@@ -40,6 +40,7 @@ export async function fetchKeycruxServices(relayUrl: string = SEARCH_RELAY) {
     },
     [relayUrl]
   );
+  console.log("found keycrux announcements", services);
   if (!services.length) return [];
 
   const valid = new Map<string, Event>();

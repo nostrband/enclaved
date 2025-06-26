@@ -150,21 +150,10 @@ export async function up(cont: DBContainer, context: ContainerContext) {
   const volumes = Object.keys(image.Config.Volumes || {});
   console.log("volumes", cont.docker, volumes);
 
-  // FIXME DEBUG
-  const ls1 = await exec("docker", ["volume", "ls", "-q"]);
-  console.log("ls1", ls1.out);
-
   const usedVolumes = new Map<string, string>();
   let volumesConf = "";
   let volumesMount = "";
   if (volumes) {
-    // const dir = `/mnt/xfs/volumes/${cont.pubkey}`;
-    // const mkdir = await exec("mkdir", ["-p", dir]);
-    // if (mkdir.code !== 0) throw new Error("Failed to create container dir");
-
-    // // total size Mb
-    // const size = Math.floor(cont.units * DISK_PER_UNIT_MB);
-    // const mkdir = await exec("xfs_quota", ["-x", "-c", `project -s ${name}`, "/mnt/xfs"]);
 
     for (const path of volumes) {
       if (!path.trim()) continue;

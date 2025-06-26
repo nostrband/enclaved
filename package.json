@@ -1,6 +1,6 @@
 {
   "name": "enclaved",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "coming soon",
   "main": "index.js",
   "scripts": {
@@ -20,6 +20,7 @@
     "ws": "^8.18.1"
   },
   "devDependencies": {
+    "@enclaved/encli": "^0.1.11",
     "@types/ws": "^8.18.1",
     "tsx": "^4.19.4"
   }

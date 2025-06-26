@@ -68,6 +68,7 @@ mount -t xfs -o pquota $DOCKER_LOOP_DEV /mnt/docker
 # make sure docker uses xfs
 mkdir -p /mnt/docker/docker
 ln -s /mnt/docker/docker /var/lib/docker
+ln -s /mnt/xfs/volumes /var/lib/docker/volumes
 
 # checks
 df

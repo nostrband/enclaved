@@ -20,7 +20,8 @@ cp ${BUILD}${BUILD_SIG} ${DIR}${BUILD_SIG}
 cp -R ${BUILD}release ${DIR}
 
 # ensure instance signature
-./node_modules/.bin/tsx src/index.ts cli ensure_instance_signature ${DIR}
+#./node_modules/.bin/tsx src/index.ts cli ensure_instance_signature ${DIR}
+encli enclave ensure_instance_signature -d ${DIR}
 
 # resources
 ENCLAVE_CPUS=`grep cpu_count /etc/nitro_enclaves/allocator.yaml | awk '{print $NF}'`

@@ -9,13 +9,16 @@ import {
   prepareRootCertificate,
 } from "../modules/nostr";
 import { CHARGE_INTERVAL, SATS_PER_UNIT_PER_INTERVAL } from "../modules/consts";
+import { ParentClient } from "../modules/parent-client";
 
 export class ContainerServer extends WSServer {
   private server: AppServer;
+  private parent: ParentClient;
 
-  constructor(port: number, server: AppServer) {
+  constructor(port: number, server: AppServer, parent: ParentClient) {
     super(port);
     this.server = server;
+    this.parent = parent;
   }
 
   private getContainer(headers?: IncomingHttpHeaders) {
@@ -96,6 +99,18 @@ export class ContainerServer extends WSServer {
     };
   }
 
+  private async log(
+    req: Req,
+    rep: Rep,
+    headers?: IncomingHttpHeaders
+  ) {
+    const cont = this.getContainer(headers);
+    if (!cont) throw new Error("Invalid token");
+
+    const message = req.params.message;
+    await this.parent.log(`container ${cont.info.pubkey}: ${message}`);
+  }
+
   protected async handle(req: Req, rep: Rep, headers?: IncomingHttpHeaders) {
     if (req.method === "create_certificate") {
       await this.createCertificate(req, rep, headers);
@@ -103,6 +118,8 @@ export class ContainerServer extends WSServer {
       await this.setInfo(req, rep, headers);
     } else if (req.method === "get_container_info") {
       await this.getContainerInfo(req, rep, headers);
+    } else if (req.method === "log") {
+      await this.log(req, rep, headers);
     }
   }
 }

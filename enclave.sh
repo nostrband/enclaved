@@ -116,11 +116,6 @@ iptables -t nat -D POSTROUTING -s 172.18.0.0/16 ! -o enclaves -j MASQUERADE
 # print the rules
 iptables-save
 
-# skopeo used as docker image,
-# needed to check docker image info
-# FIXME replace with proper API access
-#docker pull quay.io/skopeo/stable:latest #sha256:8bee970d8dbe1260526f18f99709e8323b640c8b7c0cba27da5ccf622cad47cb
-
 # test network
 curl -v http://65.109.67.137
 curl -v https://google.com
@@ -130,11 +125,6 @@ curl -v https://google.com
 
 # tcpdump -i tun0 &
 
-
-# docker load < busybox.tar
-# docker image ls
-# docker info
-# docker network ls
 
 # try on docker
 #docker run -it --rm busybox wget http://nos.lol

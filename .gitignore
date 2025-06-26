@@ -1,4 +1,5 @@
 build
+instance
 test-app
 node_modules
 vsock_proxy/target

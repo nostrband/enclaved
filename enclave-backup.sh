@@ -21,8 +21,10 @@ rm /enclaved_data
 # mount | grep /dev/loop
 # ps axuf
 
+find /mnt/xfs
+
 # hmm
-umount /mnt/xfs/docker
+umount /mnt/docker
 
 # unmount
 while ! umount /mnt/xfs ; do

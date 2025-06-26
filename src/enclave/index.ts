@@ -11,7 +11,7 @@ import { bytesToHex } from "@noble/hashes/utils";
 import { AppServer } from "./app-server";
 import { ContainerServer } from "./container-server";
 import { ContainerContext } from "./container";
-import { fetchKeycruxServices, startKeycrux } from "../modules/keycrux-client";
+import { startKeycrux } from "../modules/keycrux-client";
 
 function getSecretKey(dir: string) {
   const FILE = dir + "/.service.sk";
@@ -82,6 +82,7 @@ export async function startEnclave(opts: {
   const serviceSigner = new PrivateKeySigner(servicePrivkey);
   const servicePubkey = getPublicKey(servicePrivkey);
   console.log("servicePubkey", servicePubkey);
+  parent.log("service pubkey " + servicePubkey);
 
   // was shutdown while we were starting?
   if (shutdown) return;
@@ -106,7 +107,7 @@ export async function startEnclave(opts: {
   server = new AppServer(context, conf);
 
   // handle requests from containers
-  new ContainerServer(contPort, server);
+  new ContainerServer(contPort, server, parent);
 
   // start
   await server.start();

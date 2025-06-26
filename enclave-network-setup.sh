@@ -97,7 +97,6 @@ iptables -A OUTPUT -p tcp -s $ip -m set --match-set portfilter src -m set ! --ma
 # forward traffic from docker containers
 # =======
 # first we set the mark for outgoing packets from docker,
-# FIXME
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j MARK --set-mark 1
 iptables -t mangle -A FORWARD -s 172.17.0.0/16 ! -o docker0 -j CONNMARK --save-mark
 iptables -t mangle -A FORWARD -s 172.18.0.0/16 ! -o enclaves -j MARK --set-mark 1

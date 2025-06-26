@@ -296,6 +296,7 @@ export async function publishContainerInfo(params: {
   });
 
   const servicePubkey = await params.serviceSigner.getPublicKey();
+  const balance = Math.floor(params.info.balance / 1000);
   const containerInfo: UnsignedEvent = {
     pubkey,
     kind: KIND_ENCLAVED_PROCESS,
@@ -307,8 +308,11 @@ export async function publishContainerInfo(params: {
       ["tee_cert", JSON.stringify(cert)],
       ["alt", "enclaved container"],
       ["state", params.info.state],
+      ["balance", "" + balance],
     ],
   };
+  if (params.appPubkey)
+    containerInfo.tags.push(["p", params.appPubkey, "app"]);
   if (params.info.adminPubkey)
     containerInfo.tags.push(["p", params.info.adminPubkey, "admin"]);
   if (params.info.docker)
@@ -346,7 +350,7 @@ ${enclaved}
 ${app}
 ${admin}
 State: ${params.info.state}\n
-Balance: ${Math.floor(params.info.balance / 1000)}\n
+Balance: ${balance}\n
 `,
     picture: "",
   };
