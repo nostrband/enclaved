@@ -84,6 +84,93 @@ This is TBD, we plan to use [Caddy](https://caddyserver.com/) inside the enclave
 
 This is TBD, the plan is to have HTTP API, Nostr RPC API and control over Nostr notes/DMs, ala *"@enclave-instance deploy docker/image..."*. You get a quote and invoice, and the image is deployed if paid. Each container has a zap-able Nostr profile, so you or someone else could topup the balance by zapping or sending sats using hundreds of LN wallets and Nostr apps. Container app might even topup it's own balance itself if it's earning sats... *AI agents, AI agents everywhere!*
 
+## Install
+
+First, launch a compatible EC2 instance. It must have min 4 CPU for x86 and 2 CPU for ARM (not tried). We prefer `r7i.xlarge` which allows to allocate a lot of RAM (and thus disk space) to the enclave. Use an official Amazon Linux distro. 30Gb of disk should be enough for a production instance, add more for development setup (`docker build` eats your disk space, and it's hard to reclaim).
+
+Next, install git:
+
+```bash
+sudo dnf install -y git
+```
+
+Clone this repo and move into it:
+```bash
+git clone https://github.com/nostrband/enclaved
+cd enclaved
+```
+
+Run the install script, answer `y` several times when `nix` will be installing:
+```bash
+./install.sh
+```
+
+NOTE: you need to re-enter your shell session to enable `nix` command.
+
+Now build and deploy the custom AWS Nitro kernel:
+```bash
+./build-kernels.sh && ./deploy-kernels.sh
+```
+
+Next, build the vsock proxies:
+```bash
+./build-vsock-proxy.sh
+```
+
+Finally, build the docker image:
+
+```bash
+./build-docker.sh
+```
+
+The hash of your image must match the values of [`docker.json`](https://github.com/nostrband/enclaved/blob/main/docker.json) file in this repo (unless you changed anything). The image file is at `build/enclaved.tar` now.
+
+To build a signed `EIF` image, first you need to log in with your nsec:
+```bash
+encli login
+```
+
+You will be presented with `nostrconnect` string (see help for `bunker-url` options), use your NIP-46 signer like nsec.app to log in.
+
+Now, build and sign the enclave image file (`your_npub` is the Nostr npub you signed in with using `encli login`):
+```bash
+./build-enclave-signed.sh <your_npub>
+```
+
+This will create the `build/enclaved.eif` file and sign the build with your Nostr keys using `PCR8` value ([NEC-03](https://github.com/nostrband/necs/blob/main/03.md)). It will also sign the release (PCR0,1,2 values) as per [NEC-05](https://github.com/nostrband/necs/blob/main/05.md).
+
+NOTE: make sure to confirm signing requests in your Nostr signer.
+
+Before launching the enclave, we must launch the parent process:
+```bash
+sudo nohup ./launch-parent.sh >parent.log 2>>/dev/null &
+```
+
+NOTE: useful logs will be passed from inside the enclave to the parent and printed in `parent.log` file.
+
+Now you can launch the enclaved instance:
+```bash
+./launch-enclave-signed.sh <your_npub>
+```
+
+On the first try it will ask you for the `instance-id` of your EC2 server, and then create `instance signature` (signs the `PCR4` value, per [NEC-04](https://github.com/nostrband/necs/blob/main/04.md)). 
+
+Now your `enclaved` is running in production.
+
+To shut it down gracefully, run:
+```bash
+./shutdown-enclave.sh
+```
+
+The parent will send shutdown signal to the enclave, enclave will terminate it's processes and then send encrypted backup of it's data to `./instance/data/disk.img.age` file. The decryption keys are stored in `keycrux` services. 
+
+NOTE: if you delete `./instance/data/disk.img.age` then your enclaved state is lost! 
+NOTE: keys are only stored in `keycrux` for a couple days, do not keep your production enclaves down for a long time.
+
+// FIXME add debug instance description
+// FIXME shouldn't all these commands move to encli?
+// FIXME maybe the whole installation process should be baked into encli?
+
 ## Contribution
 
 This is prototype, if you're interested in helping shape it - send suggestions and PRs.

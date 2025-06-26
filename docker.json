@@ -1,8 +1,8 @@
 {
-  "containerimage.config.digest": "sha256:9207641527a4e82039461d129a7f0f221a6c0b4f3d16089ea6c39cc124117ee4",
+  "containerimage.config.digest": "sha256:b5da0b3430ac846f1bb69ecc642a8d8edb4fa49ea93c744d709a99971dcb643b",
   "containerimage.descriptor": {
     "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-    "digest": "sha256:6e101ab15f0eea8f50d6e7b1df03b489102370e315f328f2858bd9a1a49659ba",
+    "digest": "sha256:daa8183a58cec889f5350e90ea842d65dfd7e3e27dfd733577b052dec8bebc16",
     "size": 704,
     "annotations": {
       "org.opencontainers.image.created": "2025-05-13T07:04:38Z"
@@ -12,6 +12,6 @@
       "os": "linux"
     }
   },
-  "containerimage.digest": "sha256:6e101ab15f0eea8f50d6e7b1df03b489102370e315f328f2858bd9a1a49659ba",
+  "containerimage.digest": "sha256:daa8183a58cec889f5350e90ea842d65dfd7e3e27dfd733577b052dec8bebc16",
   "image.name": "docker.io/library/enclaved:latest"
 }
