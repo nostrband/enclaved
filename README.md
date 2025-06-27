@@ -86,7 +86,7 @@ This is TBD, the plan is to have HTTP API, Nostr RPC API and control over Nostr 
 
 ## Install
 
-First, launch a compatible EC2 instance. It must have min 4 CPU for x86 and 2 CPU for ARM (not tried). We prefer `r7i.xlarge` which allows to allocate a lot of RAM (and thus disk space) to the enclave. Use an official Amazon Linux distro. 30Gb of disk should be enough for a production instance, add more for development setup (`docker build` eats your disk space, and it's hard to reclaim).
+First, launch a compatible EC2 instance. It must have min 4 CPU for x86 and 2 CPU for ARM (not tried). We prefer `r7i.xlarge` which allows to allocate a lot of RAM (and thus disk space) to the enclave. Use an official Amazon Linux distro. 30Gb of disk should be enough for a production instance, add more for development setup (each `docker build` eats your disk space, and it's hard to reclaim).
 
 Next, install git:
 
@@ -143,7 +143,7 @@ NOTE: make sure to confirm signing requests in your Nostr signer.
 
 Before launching the enclave, we must launch the parent process:
 ```bash
-sudo nohup ./launch-parent.sh >parent.log 2>>/dev/null &
+sudo nohup ./launch-parent.sh >parent.log 2>/dev/null &
 ```
 
 NOTE: useful logs will be passed from inside the enclave to the parent and printed in `parent.log` file.
@@ -165,10 +165,13 @@ To shut it down gracefully, run:
 The parent will send shutdown signal to the enclave, enclave will terminate it's processes and then send encrypted backup of it's data to `./instance/data/disk.img.age` file. The decryption keys are stored in `keycrux` services. 
 
 NOTE: if you delete `./instance/data/disk.img.age` then your enclaved state is lost! 
+
 NOTE: keys are only stored in `keycrux` for a couple days, do not keep your production enclaves down for a long time.
 
 // FIXME add debug instance description
+
 // FIXME shouldn't all these commands move to encli?
+
 // FIXME maybe the whole installation process should be baked into encli?
 
 ## Contribution

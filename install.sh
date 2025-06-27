@@ -14,10 +14,11 @@ sudo usermod -aG docker ec2-user
 # leave 2 CPU for parent
 ENCLAVE_CPUS=`cat /proc/cpuinfo  | grep processor | wc | awk '{print $1-2}'`
 
-# NOTE: we use r7i.xlarge instance where all RAM is on the same NUMA node,
-# which means we can allocate all RAM to the enclave (we do 0.75 actually),
-# BUT some instances have several NUMA nodes (at least I think I encountered one)
-# which means much less is allowed to be allowecated. Just FYI.
+# NOTE: we use r7i.xlarge instance where a lot of RAM is on the same NUMA node,
+# which means we can allocate a lot to the enclave (we do 75%),
+# BUT some instances have several NUMA nodes (at least I think I encountered some)
+# which means much less is allowed to be allocated. Just FYI.
+# https://github.com/aws/aws-nitro-enclaves-cli/issues/263
 ENCLAVE_RAM=`free | grep Mem  | awk '{print (int($2 / 1024 / 1024) + 1) * 0.75 * 1024}'`
 cat > allocator.yaml <<EOF
 ---
