@@ -19,6 +19,7 @@ ENCLAVE_CPUS=`cat /proc/cpuinfo  | grep processor | wc | awk '{print $1-2}'`
 # BUT some instances have several NUMA nodes (at least I think I encountered some)
 # which means much less is allowed to be allocated. Just FYI.
 # https://github.com/aws/aws-nitro-enclaves-cli/issues/263
+# https://github.com/aws/aws-nitro-enclaves-cli/blob/main/bootstrap/nitro-cli-config
 ENCLAVE_RAM=`free | grep Mem  | awk '{print (int($2 / 1024 / 1024) + 1) * 0.75 * 1024}'`
 cat > allocator.yaml <<EOF
 ---
