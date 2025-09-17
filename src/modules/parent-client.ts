@@ -45,7 +45,7 @@ export class ParentClient extends WSClient {
 
     const attData = nsmParseAttestation(att);
     const { build, instance, releases, instanceAnnounceRelays, prod } =
-      await this.call<InstanceInfo>("get_meta", [att.toString("base64")]);
+      await this.call<InstanceInfo>("get_meta", [att.toString("base64")], 20000);
 
     const notDebug = !!attData.pcrs.get(0)!.find((c) => c !== 0);
     if (notDebug) {
