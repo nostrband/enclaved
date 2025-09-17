@@ -16,6 +16,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     xfsprogs=5.13.0-1ubuntu2.1 \
     "lsof=4.93.2+dfsg-1.1build2" \
     xz-utils=5.2.5-2ubuntu1 \
-    "psmisc=23.4-2build3"
+    "psmisc=23.4-2build3" \
+    chrony=4.2-2ubuntu2 
 
 #apt show lsof psmisc

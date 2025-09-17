@@ -24,11 +24,25 @@ ps axuf
 # check PRNG, make sure it uses nsm
 echo "rng_current:"
 RNG=`cat /sys/devices/virtual/misc/hw_random/rng_current`
-echo $RNG
+echo "$RNG"
 if [ "$RNG" != "nsm-hwrng" ]; then
   echo "Bad random number generator"
   exit -1
 fi
+
+echo "current_clocksource"
+CLOCK=`cat /sys/devices/system/clocksource/clocksource0/current_clocksource`
+echo "$CLOCK"
+if [ "$CLOCK" != "kvm-clock" ]; then
+  echo "Bad clock source"
+  exit -1
+fi
+
+# Clock sync settings
+echo 'refclock PHC /dev/ptp0 poll 0 dpoll -2' | tee -a /etc/chrony.conf
+echo 'makestep 0.1 -1' | tee -a /etc/chrony.conf
+echo "chrony.conf:"
+cat /etc/chrony.conf
 
 # set up loopback first
 ip addr add 127.0.0.1/8 dev lo
@@ -52,6 +66,9 @@ SUPERVISOR_PID=$!
 sleep 1
 
 ./supervisord-ctl.sh status
+
+# start chrony to sync time
+./supervisord-ctl.sh start chronyd
 
 # start proxy to parent, otherwise we can't get IP to setup the network
 ./supervisord-ctl.sh start socat-parent
