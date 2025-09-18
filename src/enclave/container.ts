@@ -167,8 +167,8 @@ export class Container {
 
   public async getInfo() {
     const df = (await execute(this.info, this.context, ["df"]))!;
-    const root = (await execute(this.info, this.context, ["ls -l /"]))!;
-    const home = (await execute(this.info, this.context, ["ls -l /home"]))!;
+    const root = (await execute(this.info, this.context, ["sh", "-c", "ls -l /"]))!;
+    const home = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home"]))!;
     return {
       df,
       root,
