@@ -712,7 +712,6 @@ export class AppServer extends EnclavedServer {
 
   protected async info(req: Request, res: Reply) {
     if (!this.startedContainers) throw new Error("Retry later");
-    if (!req.params.docker) throw new Error("Specify docker url");
     if (!req.params.pubkey) throw new Error("Specify pubkey");
 
     const cont = this.conts.get(req.params.pubkey);

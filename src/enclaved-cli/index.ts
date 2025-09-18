@@ -1,4 +1,4 @@
-import { generateSecretKey } from "nostr-tools";
+import { generateSecretKey, getPublicKey } from "nostr-tools";
 import { EnclavedClient } from "../modules/enclaved-client";
 import { hexToBytes } from "nostr-tools/utils";
 
@@ -68,10 +68,11 @@ async function info({
   privkeyHex: string;
 }) {
   const privkey = hexToBytes(privkeyHex);
+  console.log("pubkey", getPublicKey(privkey));
   const client = await getClient(relayUrl, adminPubkey, privkey);
   const reply = await client.send({
     method: "info",
-    params: { pubkey: containerPubkey },
+    params: { pubkey: containerPubkey, docker: "dummy" },
   });
   console.log("info", reply);
 }
