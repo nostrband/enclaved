@@ -309,6 +309,7 @@ export async function publishContainerInfo(params: {
       ["alt", "enclaved container"],
       ["state", params.info.state],
       ["balance", "" + balance],
+      ["upgrade", params.info.upgrade],
     ],
   };
   if (params.appPubkey)

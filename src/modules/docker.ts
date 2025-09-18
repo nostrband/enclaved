@@ -93,9 +93,10 @@ export async function inspect(image: string) {
 async function compose(params: {
   cont: DBContainer;
   context: ContainerContext;
-  cmd: "up" | "down" | "stop" | "logs";
+  cmd: "up" | "down" | "stop" | "logs" | "exec";
   dry?: boolean;
   follow?: boolean;
+  exec?: string[];
 }) {
   const path = getPath(params.cont, params.context) + "/compose.yaml";
   const args = ["compose", "-f", path, "-p", params.cont.pubkey];
@@ -104,13 +105,19 @@ async function compose(params: {
   if (params.cmd === "up") args.push("-d");
   if (params.cmd === "logs")
     args.push(...(params.follow ? ["-f"] : ["-n", "500"]));
+  if (params.cmd === "exec") {
+    args.push(...["main"]);
+    if (params.exec) args.push(...params.exec);
+  }
 
   if (params.cmd === "logs" && params.follow) {
     // background
     exec("docker", args);
+    return undefined;
   } else {
-    const { code } = await exec("docker", args);
+    const { code, out, err } = await exec("docker", args);
     if (code !== 0) throw new Error("Failed to run docker compose");
+    return { out, err };
   }
 }
 
@@ -128,6 +135,14 @@ export async function logs(
   follow?: boolean
 ) {
   await compose({ cont, context, cmd: "logs", follow });
+}
+
+export async function execute(
+  cont: DBContainer,
+  context: ContainerContext,
+  exec: string[]
+) {
+  return await compose({ cont, context, cmd: "exec", exec });
 }
 
 export async function up(cont: DBContainer, context: ContainerContext) {

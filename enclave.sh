@@ -21,6 +21,8 @@ ls -l /
 ls -l /dev/
 ps axuf
 
+sleep 1
+
 # check PRNG, make sure it uses nsm
 echo "rng_current:"
 RNG=`cat /sys/devices/virtual/misc/hw_random/rng_current`

@@ -1,4 +1,4 @@
-import { up, logs, down } from "../modules/docker";
+import { up, logs, down, execute } from "../modules/docker";
 import { ContainerState, DBContainer } from "../modules/db";
 import {
   DEFAULT_RELAYS,
@@ -8,6 +8,7 @@ import {
 import { nsmGetAttestationInfo } from "../modules/nsm";
 import { PrivateKeySigner } from "../modules/signer";
 import { ParentClient } from "../modules/parent-client";
+import { exec } from "../modules/utils";
 
 export interface ContainerContext {
   dir: string;
@@ -162,5 +163,12 @@ export class Container {
 
   public async printLogs(follow?: boolean) {
     await logs(this.info, this.context, follow);
+  }
+
+  public async getInfo() {
+    const df = (await execute(this.info, this.context, ["df"]))!;
+    return {
+      df
+    }
   }
 }

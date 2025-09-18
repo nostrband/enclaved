@@ -1,5 +1,6 @@
 import { generateSecretKey } from "nostr-tools";
 import { EnclavedClient } from "../modules/enclaved-client";
+import { hexToBytes } from "nostr-tools/utils";
 
 async function getClient(
   relayUrl: string,
@@ -55,6 +56,26 @@ async function launch({
   console.log("launch", reply);
 }
 
+async function info({
+  relayUrl,
+  adminPubkey,
+  containerPubkey,
+  privkeyHex
+}: {
+  relayUrl: string;
+  adminPubkey: string;
+  containerPubkey: string;
+  privkeyHex: string;
+}) {
+  const privkey = hexToBytes(privkeyHex);
+  const client = await getClient(relayUrl, adminPubkey, privkey);
+  const reply = await client.send({
+    method: "info",
+    params: { pubkey: containerPubkey },
+  });
+  console.log("info", reply);
+}
+
 export function mainEnclavedCli(argv: string[]) {
   if (!argv.length) throw new Error("Command not specified");
 
@@ -72,6 +93,13 @@ export function mainEnclavedCli(argv: string[]) {
       const units = Number(argv[4]);
       const upgrade = argv[5] || "";
       return launch({ relayUrl, adminPubkey, docker, units, upgrade });
+    }
+    case "info": {
+      const relayUrl = argv[1];
+      const adminPubkey = argv[2];
+      const containerPubkey = argv[3];
+      const privkeyHex = argv[4];
+      return info({ relayUrl, adminPubkey, containerPubkey, privkeyHex });
     }
     default: {
       throw new Error("Unknown command");

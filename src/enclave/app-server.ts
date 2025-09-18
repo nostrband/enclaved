@@ -229,7 +229,7 @@ export class AppServer extends EnclavedServer {
 
             try {
               // attempt an upgrade
-              await this.upgrade(c, uri);
+              await this.upgradeContainer(c, uri);
 
               // commit
               this.db.setContainerDockerUri(c.info.pubkey, uri);
@@ -268,7 +268,7 @@ export class AppServer extends EnclavedServer {
     }
   }
 
-  private async upgrade(c: Container, uri: string) {
+  private async upgradeContainer(c: Container, uri: string) {
     console.log(
       new Date(),
       `upgrading ${c.info.pubkey} from ${c.info.docker} to ${uri}`
@@ -695,6 +695,36 @@ export class AppServer extends EnclavedServer {
       pubkey: info.pubkey,
       invoice,
     };
+  }
+
+  protected async upgrade(req: Request, res: Reply) {
+    if (!this.startedContainers) throw new Error("Retry later");
+    if (!req.params.docker) throw new Error("Specify docker url");
+    if (!req.params.pubkey) throw new Error("Specify pubkey");
+
+    const cont = this.conts.get(req.params.pubkey);
+    if (!cont) throw new Error("Container not found");
+    if (cont.info.isBuiltin) throw new Error("Can't upgrade built-in container");
+
+    // FIXME how do we know who's allowed to upgrade???
+    throw new Error("Not implemented");
+  }
+
+  protected async info(req: Request, res: Reply) {
+    if (!this.startedContainers) throw new Error("Retry later");
+    if (!req.params.docker) throw new Error("Specify docker url");
+    if (!req.params.pubkey) throw new Error("Specify pubkey");
+
+    const cont = this.conts.get(req.params.pubkey);
+    if (!cont) throw new Error("Container not found");
+
+    const imageInfo = await inspectContainerImage(cont.info.docker!);
+    if (cont.info.adminPubkey !== req.pubkey
+      && !imageInfo.signers.includes(req.pubkey)
+    ) throw new Error("Only image signers or admin allowed");
+
+    const info = await cont.getInfo();
+    res.result = info;
   }
 
   public async shutdown() {

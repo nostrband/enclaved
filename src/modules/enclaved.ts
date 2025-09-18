@@ -37,12 +37,24 @@ export class EnclavedServer {
     throw new Error("Method not implemented");
   }
 
+  protected async upgrade(req: Request, res: Reply) {
+    throw new Error("Method not implemented");
+  }
+
+  protected async info(req: Request, res: Reply) {
+    throw new Error("Method not implemented");
+  }
+
   private async handle(req: Request, res: Reply) {
     switch (req.method) {
       case "ping":
         return this.ping(req, res);
       case "launch":
         return this.launch(req, res);
+      case "upgrade":
+        return this.upgrade(req, res);
+      case "info":
+        return this.info(req, res);
       default:
         throw new Error("Invalid method");
     }
