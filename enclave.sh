@@ -32,11 +32,14 @@ if [ "$RNG" != "nsm-hwrng" ]; then
   exit -1
 fi
 
+echo kvm-clock > /sys/devices/system/clocksource/clocksource0/current_clocksource
 echo "current_clocksource"
 CLOCK=`cat /sys/devices/system/clocksource/clocksource0/current_clocksource`
 echo "$CLOCK"
 if [ "$CLOCK" != "kvm-clock" ]; then
   echo "Bad clock source"
+  echo "Available:"
+  cat /sys/devices/system/clocksource/clocksource0/available_clocksource
   exit -1
 fi
 
