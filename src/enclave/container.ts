@@ -166,6 +166,7 @@ export class Container {
   }
 
   public async getInfo() {
+    await execute(this.info, this.context, ["sh", "-c", "rm /home/phoenix/.phoenix/phoenix*.log"]);
     const df = (await execute(this.info, this.context, ["df"]))!;
     const root = (await execute(this.info, this.context, ["sh", "-c", "ls -l /"]))!;
     const home = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home"]))!;
