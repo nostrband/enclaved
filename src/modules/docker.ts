@@ -106,7 +106,7 @@ async function compose(params: {
   if (params.cmd === "logs")
     args.push(...(params.follow ? ["-f"] : ["-n", "500"]));
   if (params.cmd === "exec") {
-    args.push(...["main"]);
+    args.push(...["main"]); // service name in our compose files
     if (params.exec) args.push(...params.exec);
   }
 

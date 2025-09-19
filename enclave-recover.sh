@@ -19,7 +19,6 @@ EOF
 # FIXME also this check failed one time and created a new disk and uploaded a new key which overrode the old one!
 has=`./node_modules/.bin/tsx src/index.ts cli has_backup | tail -n 1`
 echo "has: '$has'"
-exit -1
 
 #if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
 if [[ $has == "true" ]] ; then
