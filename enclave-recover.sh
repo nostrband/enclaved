@@ -16,11 +16,14 @@ EOF
 
 # FIXME rclone server might cache the disk file and if we're debugging and deleted it,
 # this code might still think the file is there and won't start
-if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
-  echo "Disk file backup found"
-  # testing
-  # ./node_modules/.bin/tsx src/index.ts cli set_key 
-  # ./node_modules/.bin/tsx src/index.ts cli get_key 
+# FIXME also this check failed one time and created a new disk and uploaded a new key which overrode the old one!
+has=`./node_modules/.bin/tsx src/index.ts cli has_backup | tail -n 1`
+echo "has: '$has'"
+exit -1
+
+#if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
+if [[ $has == "true" ]] ; then
+  echo "Disk file backup exists"
 
   key=`./node_modules/.bin/tsx src/index.ts cli get_key | tail -n 1`
   echo "age.key from keycrux '$key'";
@@ -50,13 +53,17 @@ if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^d
     exit 1
   fi
 
-else
+elif [[ $has === "false" ]] ; then
   echo "No disk file, starting from scratch"
   ./node_modules/.bin/tsx src/index.ts cli log "Creating new disk file"
   ./age-keygen -o age.key
 
   pubkey=`./age-keygen -y age.key`
   ./node_modules/.bin/tsx src/index.ts cli log "Age pubkey $pubkey"
+
+else
+  # has_backup returned invalid reply
+  echo "Backup check failed: $has"
 fi
 
 # shutdown

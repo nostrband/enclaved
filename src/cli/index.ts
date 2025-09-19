@@ -53,6 +53,12 @@ async function parentGetIP({ port }: { port: number }) {
   console.log(r.ip);
 }
 
+async function hasBackup(port: number) {
+  const client = new ParentClient({ port });
+  const r = await client.hasBackup();
+  console.log(r.has_backup);
+}
+
 async function getKey(relayUrl: string, port: number) {
   nsmInit();
 
@@ -157,6 +163,10 @@ export function mainCli(argv: string[]) {
       const relayUrl = argv?.[1] || SEARCH_RELAY;
       const port = Number(argv?.[2]) || 2080;
       return getKey(relayUrl, port);
+    }
+    case "has_backup": {
+      const port = Number(argv?.[1]) || 2080;
+      return hasBackup(port);
     }
     case "set_key": {
       const relayUrl = argv?.[1] || SEARCH_RELAY;

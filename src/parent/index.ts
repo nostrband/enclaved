@@ -124,6 +124,13 @@ class ParentServer extends WSServer {
     };
   }
 
+  private async hasBackup() {
+    const has_backup = !!fs.statSync(this.dir + "/data/disk.img.age");
+    return {
+      has_backup
+    };
+  }
+
   private async log(params: string[]) {
     console.log(new Date(), "enclave log: ", params);
   }
@@ -136,6 +143,9 @@ class ParentServer extends WSServer {
           break;
         case "get_meta":
           rep.result = await this.getMeta(req.params);
+          break;
+        case "has_backup":
+          rep.result = await this.hasBackup();
           break;
         case "log":
           rep.result = await this.log(req.params);

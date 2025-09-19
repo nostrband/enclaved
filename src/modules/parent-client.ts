@@ -27,6 +27,10 @@ export class ParentClient extends WSClient {
     return this.call<{ ip: string }>("get_ip", []);
   }
 
+  hasBackup() {
+    return this.call<{ has_backup: boolean }>("has_backup", []);
+  }
+
   getConf() {
     return this.call<any>("get_conf", []);
   }
