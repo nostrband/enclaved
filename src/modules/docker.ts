@@ -116,7 +116,7 @@ async function compose(params: {
     return undefined;
   } else {
     const { code, out, err } = await exec("docker", args);
-    if (code !== 0) throw new Error("Failed to run docker compose");
+    if (params.cmd !== "exec" && code !== 0) throw new Error("Failed to run docker compose");
     return { out, err };
   }
 }
