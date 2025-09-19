@@ -169,10 +169,12 @@ export class Container {
     const df = (await execute(this.info, this.context, ["df"]))!;
     const root = (await execute(this.info, this.context, ["sh", "-c", "ls -l /"]))!;
     const home = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home"]))!;
+    const phoenix = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home/phoenix/.phoenix/phoenix-1.log"]))!;
     return {
       df,
       root,
-      home
+      home,
+      phoenix
     }
   }
 }
