@@ -166,8 +166,9 @@ export class Container {
   }
 
   public async getInfo() {
-    await execute(this.info, this.context, ["sh", "-c", "chown root:root /home/phoenix/.phoenix/phoenix-4.log"]);
-    await execute(this.info, this.context, ["sh", "-c", "> /home/phoenix/.phoenix/phoenix-4.log"]);
+    await execute(this.info, this.context, ["sh", "-c", "apt-get install -y --no-install-recommends sqlite3"]);
+    const htlcs = await execute(this.info, this.context, ["sh", "-c", "echo \"select count(*) from htlc_infos\" | sqlite3 /home/phoenix/.phoenix/phoenix.mainnet.032514.db"]);
+    
     const df = (await execute(this.info, this.context, ["df"]))!;
     const root = (await execute(this.info, this.context, ["sh", "-c", "ls -l /"]))!;
     const home = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home"]))!;
@@ -180,7 +181,8 @@ export class Container {
       home,
       phoenix,
       log,
-      df_phoenix
+      df_phoenix,
+      htlcs
     }
   }
 }
