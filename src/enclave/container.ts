@@ -170,13 +170,13 @@ export class Container {
     const root = (await execute(this.info, this.context, ["sh", "-c", "ls -l /"]))!;
     const home = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home"]))!;
     const phoenix = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home/phoenix/.phoenix"]))!;
-    const log = (await execute(this.info, this.context, ["sh", "-c", "cat /home/phoenix/.phoenix/phoenix-1.log | tail -n 1000"]))!;
+    // const log = (await execute(this.info, this.context, ["sh", "-c", "cat /home/phoenix/.phoenix/phoenix-1.log | tail -n 1000"]))!;
     return {
       df,
       root,
       home,
       phoenix,
-      log
+      // log
     }
   }
 }
