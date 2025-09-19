@@ -176,7 +176,8 @@ export class AppServer extends EnclavedServer {
           c.info.isBuiltin ||
           c.info.state !== "deployed" ||
           !c.info.docker ||
-          c.info.upgrade !== "auto"
+          c.info.upgrade !== "auto" || 
+          c.info.upgrade === "auto" 
         )
           continue;
 
