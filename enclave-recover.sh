@@ -18,6 +18,7 @@ EOF
 # this code might still think the file is there and won't start
 # FIXME also this check failed one time and created a new disk and uploaded a new key which overrode the old one!
 has=`./node_modules/.bin/tsx src/index.ts cli has_backup | tail -n 1`
+./node_modules/.bin/tsx src/index.ts cli log "Backup: $has"
 echo "has: '$has'"
 
 #if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
