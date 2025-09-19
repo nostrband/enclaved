@@ -3,7 +3,8 @@
 
 echo "Recover data from parent"
 
-set -e 
+set -Eeuo pipefail
+#set -e 
 
 ./supervisord-ctl.sh start socat-rclone
 
@@ -18,16 +19,18 @@ EOF
 # this code might still think the file is there and won't start
 # FIXME also this check failed one time and created a new disk and uploaded a new key which overrode the old one!
 has=`./node_modules/.bin/tsx src/index.ts cli has_backup | tail -n 1`
-./node_modules/.bin/tsx src/index.ts cli log "Backup: $has"
+has=${has//$'\r'/}           # strip CR if any
+has=$(printf '%s' "$has" | tr -d ' \t\n')   # trim
+./node_modules/.bin/tsx src/index.ts cli log "Backup: '$has'"
 echo "has: '$has'"
 
 #if rclone lsf parent:/ --files-only --config /enclaved/rclone.conf | grep -q '^disk.img.age$'; then
-if [[ $has == "true" ]] ; then
+if [[ "$has" == "true" ]] ; then
   echo "Disk file backup exists"
 
   key=`./node_modules/.bin/tsx src/index.ts cli get_key | tail -n 1`
   echo "age.key from keycrux '$key'";
-  echo $key > age.key
+  echo "$key" > age.key
 
   if [[ $key == AGE-SECRET-KEY-* ]] ; then
 
@@ -53,7 +56,7 @@ if [[ $has == "true" ]] ; then
     exit 1
   fi
 
-elif [[ $has === "false" ]] ; then
+elif [[ "$has" == "false" ]] ; then
   echo "No disk file, starting from scratch"
   ./node_modules/.bin/tsx src/index.ts cli log "Creating new disk file"
   ./age-keygen -o age.key
