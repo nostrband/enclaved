@@ -166,23 +166,20 @@ export class Container {
   }
 
   public async getInfo() {
-    await execute(this.info, this.context, ["sh", "-c", "apt-get install -y --no-install-recommends sqlite3"]);
-    const htlcs = await execute(this.info, this.context, ["sh", "-c", "echo \"select count(*) from htlc_infos\" | sqlite3 /home/phoenix/.phoenix/phoenix.mainnet.032514.db"]);
+    // await execute(this.info, this.context, ["sh", "-c", "apt-get install -y --no-install-recommends sqlite3"]);
+    // const htlcs = await execute(this.info, this.context, ["sh", "-c", "echo \"select count(*) from htlc_infos\" | sqlite3 /home/phoenix/.phoenix/phoenix.mainnet.032514.db"]);
     
     const df = (await execute(this.info, this.context, ["df"]))!;
     const root = (await execute(this.info, this.context, ["sh", "-c", "ls -l /"]))!;
     const home = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home"]))!;
     const phoenix = (await execute(this.info, this.context, ["sh", "-c", "ls -l /home/phoenix/.phoenix"]))!;
-    const log = (await execute(this.info, this.context, ["sh", "-c", "tail -n 100 /home/phoenix/.phoenix/phoenix-1.log"]))!;
     const df_phoenix = (await execute(this.info, this.context, ["sh", "-c", "df /home/phoenix/.phoenix"]))!;
     return {
       df,
       root,
       home,
       phoenix,
-      log,
       df_phoenix,
-      htlcs
     }
   }
 }
