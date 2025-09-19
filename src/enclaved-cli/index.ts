@@ -74,7 +74,7 @@ async function info({
     method: "info",
     params: { pubkey: containerPubkey, docker: "dummy" },
   });
-  console.log("info", reply);
+  console.log(JSON.stringify(reply, null, 2));
 }
 
 export function mainEnclavedCli(argv: string[]) {
